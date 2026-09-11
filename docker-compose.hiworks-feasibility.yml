@@ -1,4 +1,4 @@
-name: coramail-agent-hiworks-feasibility
+name: coramail-agent-providers-hiworks
 
 services:
   web:
@@ -50,12 +50,12 @@ services:
 
 volumes:
   coramail_hiworks_postgres_data:
-    name: coramail_agent_hiworks_feasibility_postgres_data
+    name: coramail_agent_providers_hiworks_postgres_data
   coramail_hiworks_qdrant_data:
-    name: coramail_agent_hiworks_feasibility_qdrant_data
+    name: coramail_agent_providers_hiworks_qdrant_data
   coramail_hiworks_ollama_data:
-    name: coramail_agent_hiworks_feasibility_ollama_data
+    name: coramail_agent_providers_hiworks_ollama_data
   coramail_hiworks_hf_cache:
-    name: coramail_agent_hiworks_feasibility_hf_cache
+    name: coramail_agent_providers_hiworks_hf_cache
   coramail_hiworks_uv_cache:
-    name: coramail_agent_hiworks_feasibility_uv_cache
+    name: coramail_agent_providers_hiworks_uv_cache

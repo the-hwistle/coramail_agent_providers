@@ -1,4 +1,4 @@
-name: coramail-agent-dev
+name: coramail-agent-providers-dev
 
 services:
   web:
@@ -6,16 +6,16 @@ services:
       context: .
     command: >
       sh -c "python -m app.tools.bootstrap_dev_environment &&
-      exec python -m uvicorn app.server:app --host 0.0.0.0 --port ${CORAMAIL_DEV_PORT:-8000}"
+      exec python -m uvicorn app.server:app --host 0.0.0.0 --port ${CORAMAIL_DEV_PORT:-8030}"
     restart: unless-stopped
     environment:
       CORAMAIL_ENV_FILE: /app/.env
       CORAMAIL_DEMO_MODE: ${CORAMAIL_DEMO_MODE:-false}
       CORAMAIL_DEMO_SOURCE: ${CORAMAIL_DEMO_SOURCE:-postgres}
       CORAMAIL_LOCAL_DEV_DEFAULTS: "false"
-      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail}
+      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail_providers}
       CORAMAIL_QDRANT_URL: http://qdrant:6333
-      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_clean_v2}
+      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_providers_dev}
       CORAMAIL_QDRANT_VECTOR_SIZE: ${CORAMAIL_QDRANT_VECTOR_SIZE:-768}
       CORAMAIL_DEV_SEED_DEMO: ${CORAMAIL_DEV_SEED_DEMO:-true}
       CORAMAIL_DEV_WAIT_SECONDS: ${CORAMAIL_DEV_WAIT_SECONDS:-90}
@@ -51,7 +51,7 @@ services:
       - "host.docker.internal:host-gateway"
     gpus: all
     ports:
-      - "${CORAMAIL_DEV_PORT:-8000}:${CORAMAIL_DEV_PORT:-8000}"
+      - "${CORAMAIL_DEV_PORT:-8030}:${CORAMAIL_DEV_PORT:-8030}"
     volumes:
       - .:/app
       - coramail_uv_cache:/root/.cache/uv
@@ -72,9 +72,9 @@ services:
       - tools
     restart: "no"
     environment:
-      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail}
+      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail_providers}
       CORAMAIL_QDRANT_URL: http://qdrant:6333
-      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_clean_v2}
+      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_providers_dev}
       CORAMAIL_QDRANT_VECTOR_SIZE: ${CORAMAIL_QDRANT_VECTOR_SIZE:-768}
       CORAMAIL_DEV_SEED_DEMO: ${CORAMAIL_DEV_SEED_DEMO:-true}
       CORAMAIL_DEV_WAIT_SECONDS: ${CORAMAIL_DEV_WAIT_SECONDS:-90}
@@ -88,12 +88,12 @@ services:
     image: ${CORAMAIL_POSTGRES_IMAGE:-postgres:17}
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${CORAMAIL_POSTGRES_DB:-coramail}
+      POSTGRES_DB: ${CORAMAIL_POSTGRES_DB:-coramail_providers}
       POSTGRES_USER: ${CORAMAIL_POSTGRES_USER:-coramail}
       POSTGRES_PASSWORD: ${CORAMAIL_POSTGRES_PASSWORD:-coramail}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "${CORAMAIL_POSTGRES_PORT:-5432}:5432"
+      - "${CORAMAIL_POSTGRES_PORT:-55452}:5432"
     volumes:
       - coramail_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -111,8 +111,8 @@ services:
     image: ${CORAMAIL_QDRANT_IMAGE:-qdrant/qdrant:latest}
     restart: unless-stopped
     ports:
-      - "${CORAMAIL_QDRANT_HTTP_PORT:-6333}:6333"
-      - "${CORAMAIL_QDRANT_GRPC_PORT:-6334}:6334"
+      - "${CORAMAIL_QDRANT_HTTP_PORT:-6653}:6333"
+      - "${CORAMAIL_QDRANT_GRPC_PORT:-6654}:6334"
     volumes:
       - coramail_qdrant_data:/qdrant/storage
 
@@ -123,7 +123,7 @@ services:
     environment:
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-10m}
     ports:
-      - "${CORAMAIL_OLLAMA_PORT:-11435}:11434"
+      - "${CORAMAIL_OLLAMA_PORT:-11456}:11434"
     volumes:
       - coramail_ollama_data:/root/.ollama
 
@@ -149,7 +149,7 @@ services:
       - --gpu-memory-utilization
       - ${CORAMAIL_VLLM_TEXT_GPU_MEMORY_UTILIZATION:-0.75}
     ports:
-      - "${CORAMAIL_VLLM_TEXT_PORT:-8001}:8000"
+      - "${CORAMAIL_VLLM_TEXT_PORT:-8031}:8000"
     volumes:
       - coramail_hf_cache:/root/.cache/huggingface
     healthcheck:
@@ -181,7 +181,7 @@ services:
       - --gpu-memory-utilization
       - ${CORAMAIL_VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION:-0.20}
     ports:
-      - "${CORAMAIL_VLLM_EMBEDDING_PORT:-8002}:8000"
+      - "${CORAMAIL_VLLM_EMBEDDING_PORT:-8032}:8000"
     volumes:
       - coramail_hf_cache:/root/.cache/huggingface
     healthcheck:

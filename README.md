@@ -63,6 +63,8 @@ scripts/dev_up.sh
 
 Docker Compose의 웹 서비스는 PostgreSQL schema, demo seed, Qdrant 기본 collection을 준비한 뒤 FastAPI 개발 서버를 실행한다. 호스트에서 직접 uvicorn을 실행해야 하는 디버깅 상황에서는 `scripts/dev_app.sh`를 사용한다.
 
+이 저장소의 기본 개발 스택은 원본 `coramail_agent`와 분리되도록 `coramail-agent-providers-dev` Compose project를 사용한다. 기본 포트는 web `8030`, PostgreSQL `55452`, Qdrant `6653/6654`, Ollama `11456`이다.
+
 메일 provider는 `CORAMAIL_MAIL_PROVIDER`로 선택한다. 기본값은 `gmail`이며, 새로 추가된 provider는 `naver`와 `hiworks`다. Naver는 `config/naver-feasibility.env.example`, Hiworks는 `config/hiworks-feasibility.env.example`를 기준으로 app password 환경변수를 설정한다. 실제 비밀번호나 `.env` 파일은 Git에 넣지 않는다.
 
 Provider별 격리 검증 스택:
@@ -71,6 +73,8 @@ Provider별 격리 검증 스택:
 scripts/dev_naver_feasibility_up.sh
 scripts/dev_hiworks_feasibility_up.sh
 ```
+
+Provider별 격리 스택은 각각 `coramail-agent-providers-naver`, `coramail-agent-providers-hiworks` Compose project를 사용한다. 기본 포트는 Naver web `8010`, PostgreSQL `55432`, Qdrant `6633/6634`, Ollama `11436`; Hiworks web `8020`, PostgreSQL `55442`, Qdrant `6643/6644`, Ollama `11446`이다.
 
 기본 정적 검증과 테스트:
 

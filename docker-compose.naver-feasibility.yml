@@ -1,4 +1,4 @@
-name: coramail-agent-naver-feasibility
+name: coramail-agent-providers-naver
 
 services:
   web:
@@ -50,12 +50,12 @@ services:
 
 volumes:
   coramail_naver_postgres_data:
-    name: coramail_agent_naver_feasibility_postgres_data
+    name: coramail_agent_providers_naver_postgres_data
   coramail_naver_qdrant_data:
-    name: coramail_agent_naver_feasibility_qdrant_data
+    name: coramail_agent_providers_naver_qdrant_data
   coramail_naver_ollama_data:
-    name: coramail_agent_naver_feasibility_ollama_data
+    name: coramail_agent_providers_naver_ollama_data
   coramail_naver_hf_cache:
-    name: coramail_agent_naver_feasibility_hf_cache
+    name: coramail_agent_providers_naver_hf_cache
   coramail_naver_uv_cache:
-    name: coramail_agent_naver_feasibility_uv_cache
+    name: coramail_agent_providers_naver_uv_cache
