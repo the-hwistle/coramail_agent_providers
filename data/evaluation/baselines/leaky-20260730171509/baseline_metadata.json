@@ -1,0 +1,7 @@
+{
+  "label": "leaky-baseline",
+  "reason": "evaluation targets overlap retrieval corpus",
+  "text_model": "qwen2.5:1.5b",
+  "embedding_model": "nomic-embed-text:latest",
+  "case_count": 5
+}

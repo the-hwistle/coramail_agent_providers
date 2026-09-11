@@ -1,0 +1,72 @@
+<section class="view page-view search-view" data-view="search">
+  <div class="search-compose">
+    <form
+      class="search-box"
+      action="{% if demo_mode %}/ui/search{% else %}/ui/search-results{% endif %}"
+      method="get"
+      hx-get="/ui/search-results"
+      hx-target="#search-results-body"
+      hx-swap="innerHTML"
+      hx-indicator="#search-results"
+      hx-disabled-elt="find input, find button"
+    >
+      <div class="search-box-field">
+        <input
+          id="searchQueryInput"
+          class="input"
+          name="q"
+          value="{{ query }}"
+          placeholder="{% if demo_mode %}예: QT-2026-0812-03 견적서의 납기와 총액{% else %}예: 최근 견적서의 납기와 총액{% endif %}"
+          aria-label="메일·첨부 RAG 질문"
+          autocomplete="off"
+          required
+        >
+      </div>
+      <div class="search-box-side">
+        <button class="btn" type="submit">검색</button>
+      </div>
+    </form>
+    {% if demo_mode %}
+      <div class="search-example-strip" aria-label="시연 검색 예시">
+        <button
+          class="search-example-btn"
+          type="button"
+          data-search-example="QT-2026-0812-03 견적서의 납기와 총액"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">request_quote</span>
+          견적서 납기·총액
+        </button>
+        <button
+          class="search-example-btn"
+          type="button"
+          data-search-example="URG-DEMO-2026-0810-01 긴급 장애 메일 찾아줘"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+          긴급 장애 메일
+        </button>
+        <button
+          class="search-example-btn"
+          type="button"
+          data-search-example="가장 최신 메일이 뭐야"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+          최신 메일
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
+  <div id="search-results">
+    <section class="panel search-empty-panel search-loading-panel">
+      <div class="panel-body">
+        <div id="search-loading" class="empty-state search-loading" aria-live="polite">
+          <span class="material-symbols-outlined">progress_activity</span>
+          <strong>질문 분석·근거 검색·답변 생성 중</strong>
+        </div>
+      </div>
+    </section>
+    <div id="search-results-body">
+      {% include "partials/search_results.html" %}
+    </div>
+  </div>
+</section>

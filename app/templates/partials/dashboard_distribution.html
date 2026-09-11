@@ -1,0 +1,79 @@
+{% from "macros.html" import category_chip, info_tooltip with context %}
+{% set distribution_today = category_distribution or summary %}
+{% set distribution_all = category_distribution_all or summary %}
+{% set counts = distribution_today.mail_categories or distribution_today.business_labels or {} %}
+{% set all_counts = distribution_all.mail_categories or distribution_all.business_labels or {} %}
+{% set total = counts.values() | sum %}
+{% set all_total = all_counts.values() | sum %}
+{% set chart_palette = category_chart_palette(category_order) %}
+
+<div
+  class="chart-section"
+  data-dashboard-distribution
+  data-chart-categories='{{ category_order | tojson | forceescape }}'
+  data-chart-counts='{{ counts | tojson | forceescape }}'
+  data-chart-counts-today='{{ counts | tojson | forceescape }}'
+  data-chart-counts-all='{{ all_counts | tojson | forceescape }}'
+  data-chart-palette='{{ chart_palette | tojson | forceescape }}'
+  data-chart-total="{{ total }}"
+  data-chart-total-today="{{ total }}"
+  data-chart-total-all="{{ all_total }}"
+>
+  <div class="dashboard-card-title-row">
+    <div class="dashboard-card-title-copy">
+      <span class="label dashboard-card-title">Category Distribution</span>
+      {{ info_tooltip("카테고리별 메일 비중을 빠르게 확인합니다.", "카테고리 분포 설명") }}
+    </div>
+    {% if dashboard_scope_toggle_enabled %}
+      <div class="dashboard-scope-control">
+        <div class="dashboard-scope-toggle" role="group" aria-label="Category Distribution scope">
+          <button type="button" class="dashboard-scope-toggle-button is-active" data-dashboard-distribution-scope="today" aria-pressed="true">Today</button>
+          <button type="button" class="dashboard-scope-toggle-button" data-dashboard-distribution-scope="all" aria-pressed="false">All</button>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="chart-layout">
+    <div class="donut-wrap">
+      <canvas id="categoryDonut" role="img"
+        aria-label="카테고리별 분포 도넛 차트. 총 {{ total }}건.">
+        {% for category in category_order %}{{ category }}: {{ counts.get(category, 0) }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </canvas>
+      <div class="donut-center" id="donutCenter">
+        <strong>{{ total }}건</strong>
+        <span>전체</span>
+      </div>
+      <div class="dashboard-donut-tooltip" id="categoryDonutTooltip" role="tooltip" aria-hidden="true"></div>
+    </div>
+
+    {% for scope_key, scoped_counts, scoped_total in [("today", counts, total), ("all", all_counts, all_total)] %}
+      <div class="stat-list{% if scope_key != "today" %} is-hidden{% endif %}" data-dashboard-distribution-list="{{ scope_key }}">
+        {% for category in category_order %}
+          {% set count = scoped_counts.get(category, 0) %}
+          {% set pct = ((count / scoped_total * 100) | round | int) if scoped_total else 0 %}
+          <div class="stat-row">
+            <div class="stat-label">
+              <span class="stat-dot" style="background: {{ chart_palette[loop.index0] }};"></span>
+              <span>{{ category }}</span>
+            </div>
+            <div class="stat-value">
+              <strong>{{ count }}건</strong>
+              <span>{{ pct }}%</span>
+            </div>
+          </div>
+        {% endfor %}
+        <div class="stat-row stat-row-total">
+          <div class="stat-label">
+            <span class="stat-dot stat-dot-total"></span>
+            <span>총계</span>
+          </div>
+          <div class="stat-value">
+            <strong>{{ scoped_total }}건</strong>
+            <span>100%</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>

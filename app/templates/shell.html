@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CoRA Mail AI Router</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='app-02.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='app-03.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='app-04.css') }}?v={{ asset_version }}">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script id="chartjs-cdn" src="https://cdn.jsdelivr.net/npm/chart.js" async></script>
+</head>
+<body>
+  {% set hide_documents_nav_for_demo_screenshot = demo_mode|default(false) %}
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">CoRA</span>
+        <div class="brand-copy">
+          <strong>CoRA Mail</strong>
+          <span>Corporate Routing Assistant</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Main navigation">
+        <button type="button" class="{% if active_view|default('dashboard') == 'dashboard' %}active{% endif %}" hx-post="/ui/dashboard" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Dashboard 탭 열기">
+          <span class="material-symbols-outlined">dashboard</span>Dashboard
+        </button>
+        <button type="button" class="{% if active_view|default('dashboard') == 'inbox' %}active{% endif %}" hx-post="/ui/inbox" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Inbox 탭 열기">
+          <span class="material-symbols-outlined">inbox</span>Inbox
+        </button>
+        <button type="button" class="{% if active_view|default('dashboard') == 'monitoring' %}active{% endif %}" hx-post="/ui/monitoring" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Monitoring 탭 열기">
+          <span class="material-symbols-outlined">monitoring</span>Monitoring
+        </button>
+        {% if current_user_can_view_all_assignees %}
+          <button type="button" class="{% if active_view|default('dashboard') == 'assignees' %}active{% endif %}" hx-post="/ui/assignees" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Assignments 탭 열기">
+            <span class="material-symbols-outlined">assignment_ind</span>Assignments
+          </button>
+        {% else %}
+          <button type="button" class="{% if active_view|default('dashboard') == 'my-work' %}active{% endif %}" hx-post="/ui/my-work" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="My Work 탭 열기">
+            <span class="material-symbols-outlined">assignment_ind</span>My Work
+          </button>
+        {% endif %}
+        {% if not hide_documents_nav_for_demo_screenshot %}
+          <button type="button" class="{% if active_view|default('dashboard') == 'documents' %}active{% endif %}" hx-post="/ui/documents" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Documents 탭 열기">
+            <span class="material-symbols-outlined">description</span>Documents
+          </button>
+        {% endif %}
+        <button type="button" class="{% if active_view|default('dashboard') == 'address-book' %}active{% endif %}" hx-post="/ui/address-book" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Contacts 탭 열기">
+          <span class="material-symbols-outlined">contacts</span>Contacts
+        </button>
+        <button type="button" class="{% if active_view|default('dashboard') == 'search' %}active{% endif %}" hx-post="/ui/search" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Search 탭 열기">
+          <span class="material-symbols-outlined">search</span>Search
+        </button>
+        <button type="button" class="{% if active_view|default('dashboard') == 'chats' %}active{% endif %}" hx-post="/ui/chats" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Chats 탭 열기">
+          <span class="material-symbols-outlined">forum</span>Chats
+        </button>
+        <button type="button" class="{% if active_view|default('dashboard') == 'settings' %}active{% endif %}" hx-post="/ui/settings" hx-target="#main-panel" hx-swap="innerHTML" hx-sync="#main-panel:replace" aria-label="Settings 탭 열기">
+          <span class="material-symbols-outlined">settings</span>Settings
+        </button>
+      </nav>
+    </aside>
+
+    <section class="main">
+      <header class="topbar">
+        <div class="topbar-heading">
+          <div class="title" id="pageTitle">Dashboard</div>
+          {% if demo_mode %}
+            <div class="gmail-account-banner is-demo" title="{{ gmail_connected_account }}">
+              <span class="material-symbols-outlined" aria-hidden="true">mail</span>
+              <span class="gmail-account-value mono">{{ gmail_connected_account }}</span>
+            </div>
+          {% else %}
+            <button
+              class="gmail-account-banner"
+              type="button"
+              data-gmail-settings-open
+              title="{{ mail_provider_label }} Mail 동기화 설정"
+              aria-label="{{ mail_provider_label }} Mail 동기화 설정 열기"
+              aria-haspopup="dialog"
+              aria-controls="gmailSettingsModal"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">mail</span>
+              <span class="gmail-account-value mono">{{ gmail_connected_account }}</span>
+            </button>
+          {% endif %}
+        </div>
+        <div class="top-actions">
+          <button
+            class="mode-switch mode-switch-{{ display_mode }}"
+            type="button"
+            hx-post="/ui/display-mode/toggle"
+            hx-swap="none"
+            title="{{ display_mode_next_label }} 데이터 보기로 전환"
+            aria-label="{{ display_mode_next_label }} 데이터 보기로 전환"
+          >
+            <span class="mode-switch-track" aria-hidden="true">
+              <span class="mode-switch-thumb"></span>
+            </span>
+            <span class="mode-switch-text">{{ display_mode_label }}</span>
+          </button>
+          <button
+            class="icon-btn"
+            id="topbarManualSync"
+            hx-post="/ui/auto-sync/run"
+            hx-swap="none"
+            title="Run manual sync"
+            aria-label="수동 동기화 실행"
+            hidden
+          >
+            <span class="material-symbols-outlined">sync</span>
+          </button>
+          <a class="icon-btn" href="/docs" title="API Docs" aria-label="API 문서 열기"><span class="material-symbols-outlined">api</span></a>
+          <span class="current-user">{{ current_user }}</span>
+          <form class="logout-form" method="post" action="/logout">
+            <button class="icon-btn" type="submit" title="Logout" aria-label="로그아웃">
+              <span class="material-symbols-outlined">logout</span>
+            </button>
+          </form>
+          <div class="avatar">AI</div>
+        </div>
+      </header>
+      <main class="content" id="main-panel">
+        {% include initial_view_template|default("views/dashboard.html") %}
+      </main>
+    </section>
+  </div>
+
+  {% include "partials/shell_overlays.html" %}
+
+  {% include "partials/shell_runtime.html" %}
+</body>
+</html>

@@ -1,0 +1,140 @@
+{% from "macros.html" import category_chip, sender_contact_link with context %}
+{% set is_dashboard_rows = mail_rows_mode == "dashboard" %}
+{% for email in emails %}
+  {% set classification = email.classification or {} %}
+  {% set label = email.mail_category or mail_category(classification) %}
+  {% set state = email.work_status or email.classification_state or "unclassified" %}
+  {% set attention_quadrant = email.attention_quadrant or classification.attention_quadrant or "normal" %}
+  {% set is_attention_urgent_important = attention_quadrant == "urgent_important" %}
+  {% set is_attention_urgent = attention_quadrant == "urgent" %}
+  {% set is_attention_important = attention_quadrant == "important" %}
+  {% set shows_read_state = is_dashboard_rows or (current_user_can_view_all_assignees is defined and not current_user_can_view_all_assignees) %}
+  {% set is_assignee_read = shows_read_state and email.current_user_read_at %}
+  {% set email_detail_url = "/ui/emails/" ~ (email.email_uid | urlencode) %}
+  {% set routing_text = receiver_display_text(email.assignee_name or email.routing_display or classification.assignee_name or classification.routing_display or route_label(classification.routing_labels or [])) %}
+  <tr
+    hx-post="{% if is_dashboard_rows %}/ui/inbox?email_index={{ email.index }}&email_uid={{ email.email_uid|urlencode }}{% else %}{{ email_detail_url }}{% endif %}"
+    hx-target="{% if is_dashboard_rows %}#main-panel{% else %}#email-detail{% endif %}"
+    hx-swap="innerHTML"
+    hx-on:click="if (document.getElementById('selectedEmailIndex')) document.getElementById('selectedEmailIndex').value='{{ email.index }}'; if (document.getElementById('selectedEmailUid')) document.getElementById('selectedEmailUid').value='{{ email.email_uid }}';"
+    class="clickable-row{% if selected_email_uid and email.email_uid == selected_email_uid %} is-selected{% elif selected_email_uid|default('') == '' and selected_email_index is not none and email.index == selected_email_index %} is-selected{% endif %}{% if is_assignee_read %} is-assignee-read{% endif %}{% if is_attention_urgent_important %} is-attention-urgent-important{% elif is_attention_urgent %} is-attention-urgent{% elif is_attention_important %} is-attention-important{% endif %}"
+    data-email-index="{{ email.index }}"
+    data-email-uid="{{ email.email_uid }}"
+    data-business-label="{{ label }}"
+    data-mail-category="{{ label }}"
+    data-dashboard-mail-date="{{ format_mail_date_key(email.date or email.received_at or email.created_at) }}"
+    data-dashboard-mail-urgent="{{ 'true' if attention_quadrant in ['urgent_important', 'urgent'] else 'false' }}"
+    data-dashboard-mail-attention="{{ attention_quadrant }}"
+    data-attention-quadrant="{{ attention_quadrant }}"
+  >
+    <td class="mail-read-state-cell">
+      {% if shows_read_state %}
+        <span
+          class="material-symbols-outlined mail-read-indicator"
+          title="{{ '읽은 메일' if is_assignee_read else '읽지 않은 메일' }}"
+          aria-label="{{ '읽은 메일' if is_assignee_read else '읽지 않은 메일' }}"
+        >{{ 'drafts' if is_assignee_read else 'mail' }}</span>
+      {% endif %}
+    </td>
+
+    <td class="{% if is_dashboard_rows %}dashboard-status-cell{% else %}inbox-status-cell{% endif %}">
+      <span class="row-status {{ state }}">
+        <span class="material-symbols-outlined">
+          {% if state == "completed" %}auto_awesome{% elif state == "forwarded" %}forward_to_inbox{% elif state == "acknowledged" %}drafts{% elif state == "auto_assigned" or state == "assigned" %}assignment_turned_in{% elif state == "review_required" %}rate_review{% elif state == "running" or state == "cancelling" %}progress_activity{% elif state == "queued" %}schedule{% elif state == "failed" %}error{% elif state == "cancelled" %}delete{% else %}pending{% endif %}
+        </span>
+        {{ email.work_status_label or email.classification_state_label or state }}
+      </span>
+    </td>
+    <td
+      class="{% if is_dashboard_rows %}truncate dashboard-sender-cell{% else %}truncate inbox-sender-cell{% endif %}"
+      title="{{ display_sender_name(email) }}"
+    >
+      {{ sender_contact_link(email, compact=not is_dashboard_rows) }}
+    </td>
+    <td class="truncate subject-col{% if not is_dashboard_rows %} inbox-subject-cell{% endif %}">
+      {% if is_dashboard_rows %}
+        <div class="mail-subject-line">
+          <strong class="mail-subject-text">{{ email.subject or "(no subject)" }}</strong>
+          {% if email.has_attachment %}
+            <span
+              class="material-symbols-outlined mail-attachment-indicator"
+              title="첨부파일 있음"
+              aria-label="Has attachment"
+            >attach_file</span>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="inbox-cell-stack inbox-request-cell">
+          <div class="mail-subject-line">
+            <strong class="inbox-subject-main mail-subject-text">{{ email.subject or "(no subject)" }}</strong>
+            {% if email.has_attachment %}
+              <span
+                class="material-symbols-outlined mail-attachment-indicator"
+                title="첨부파일 있음"
+                aria-label="Has attachment"
+              >attach_file</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    </td>
+    <td class="{% if not is_dashboard_rows %}inbox-classification-cell{% endif %}">{{ category_chip(label) }}</td>
+    <td
+      class="{% if is_dashboard_rows %}dashboard-receiver-cell{% else %}inbox-routing-cell{% endif %}"
+      title="{{ routing_text }}"
+    >
+      {% set assignee_link_value = email.assignee_email or email.assignee_name or routing_text or email.assignee_user_id %}
+      {% if routing_text != "미할당" and assignee_link_value %}
+        <button
+          type="button"
+          class="chip receiver-chip {{ receiver_chip_class(routing_text, label) }} receiver-chip-link"
+          hx-post="/ui/assignees?assignee={{ assignee_link_value|urlencode }}"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+          hx-on:click="event.stopPropagation()"
+          aria-label="{{ routing_text }} 담당 업무 보기"
+        >{{ routing_text }}</button>
+      {% else %}
+        <span class="chip receiver-chip {{ receiver_chip_class(routing_text, label) }}">{{ routing_text }}</span>
+      {% endif %}
+    </td>
+    <td
+      class="mono{% if is_dashboard_rows %} dashboard-time-cell{% else %} inbox-time-cell{% endif %}"
+      title="{{ format_mail_datetime(email.date or email.received_at or email.created_at) }}"
+    >
+      {{ format_mail_table_time(email.date or email.received_at or email.created_at) }}
+    </td>
+    {% if is_dashboard_rows %}
+      <td class="dashboard-route-cell">
+        <div class="dashboard-route-action">
+          <button
+            type="button"
+            class="btn route-now-btn route-now-btn--{{ email.manual_route_button_variant or 'ready' }}"
+            data-manual-route-button
+            data-manual-route-status="{{ email.manual_route_status or '' }}"
+            hx-post="/ui/emails/{{ email.email_uid | urlencode }}/route-manual"
+            hx-target="#dashboardMailRows"
+            hx-swap="innerHTML"
+            hx-confirm="이 메일을 현재 담당자에게 수동 라우팅하시겠습니까?"
+            hx-on:click="event.stopPropagation()"
+            {% if not email.assignee_email or email.manual_route_status == "pending" %}disabled{% endif %}
+            title="{{ email.manual_route_button_title or email.assignee_email or '담당자 이메일이 아직 없습니다.' }}"
+          >
+            <span class="material-symbols-outlined">forward_to_inbox</span>
+            {{ email.manual_route_button_label or "전달" }}
+          </button>
+        </div>
+      </td>
+    {% endif %}
+  </tr>
+{% else %}
+  <tr>
+    <td colspan="{% if is_dashboard_rows %}8{% else %}7{% endif %}" class="empty-cell">표시할 이메일이 없습니다.</td>
+  </tr>
+{% endfor %}
+
+<tr id="categoryFilterEmptyRow" hidden>
+  <td colspan="{% if is_dashboard_rows %}8{% else %}7{% endif %}" class="empty-cell">
+    선택한 카테고리에 해당하는 이메일이 없습니다.
+  </td>
+</tr>

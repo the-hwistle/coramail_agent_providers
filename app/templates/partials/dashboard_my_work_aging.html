@@ -1,0 +1,53 @@
+{% from "macros.html" import info_tooltip with context %}
+{% set aging = my_work_aging or {} %}
+{% set buckets = aging.buckets or [] %}
+{% set active_count = aging.active_count or 0 %}
+
+<div class="my-work-aging-dashboard" data-dashboard-my-work-aging>
+  <div class="dashboard-card-title-row">
+    <div class="dashboard-card-title-copy">
+      <span class="label dashboard-card-title">Work Priority</span>
+      {{ info_tooltip("현재 로그인한 담당자의 미완료 업무를 기한 초과와 수신 후 경과일 기준으로 표시합니다.", "내 업무 기한 상태 설명") }}
+    </div>
+  </div>
+
+  {% if active_count %}
+    <div class="my-work-aging-visual" aria-label="내 미완료 업무 기한 및 경과일 분포">
+      <div class="my-work-aging-axis">
+        <span>기한 초과</span>
+        <strong>{{ active_count }}건</strong>
+        <span>여유 있음</span>
+      </div>
+      <div class="my-work-aging-stack" aria-hidden="true">
+        {% for bucket in buckets %}
+          {% if bucket.count %}
+            <span
+              class="my-work-aging-segment"
+              data-my-work-aging-bucket="{{ bucket.key }}"
+              style="width: {{ bucket.share_display_percent or bucket.share_percent or bucket.bar_display_percent or bucket.bar_percent }}%;"
+              title="{{ bucket.label }} {{ bucket.count }}건"
+            ></span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="my-work-aging-legend">
+        {% for bucket in buckets %}
+          <div class="my-work-aging-legend-item" data-my-work-aging-bucket="{{ bucket.key }}">
+            <span class="my-work-aging-dot" aria-hidden="true"></span>
+            <span class="my-work-aging-label">
+              {% if bucket.key == "overdue" %}기한 초과{% else %}{{ bucket.label }}{% endif %}
+            </span>
+            <strong>{{ bucket.count }}건</strong>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="empty small">처리 대기 업무가 없습니다.</div>
+  {% endif %}
+
+  <div class="my-work-aging-total">
+    <span>미완료 {{ active_count }}건</span>
+    <span>오늘 완료 {{ aging.completed_today_count or 0 }}건</span>
+  </div>
+</div>

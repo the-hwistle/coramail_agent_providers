@@ -1,0 +1,76 @@
+name: Live stack E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      text_model:
+        description: Gemini text model used by the live Mail Decision run
+        required: true
+        default: gemini-3.5-flash-lite
+        type: string
+      embedding_model:
+        description: Gemini embedding model used by Qdrant retrieval
+        required: true
+        default: gemini-embedding-001
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: coramail
+          POSTGRES_USER: coramail
+          POSTGRES_PASSWORD: coramail
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U coramail -d coramail"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+
+    env:
+      CORAMAIL_DATABASE_URL: postgresql://coramail:coramail@127.0.0.1:5432/coramail
+      CORAMAIL_QDRANT_URL: http://127.0.0.1:6333
+      CORAMAIL_QDRANT_CASE_COLLECTION: coramail_live_e2e_cases
+      CORAMAIL_QDRANT_VECTOR_SIZE: "768"
+      CORAMAIL_DEV_SEED_DEMO: "true"
+      CORAMAIL_DEV_WAIT_SECONDS: "90"
+      CORAMAIL_LLM_PROVIDER: gemini
+      CORAMAIL_TEXT_LLM_PROVIDER: gemini
+      CORAMAIL_EMBEDDING_PROVIDER: gemini
+      CORAMAIL_TEXT_MODEL: ${{ inputs.text_model }}
+      CORAMAIL_EMBEDDING_MODEL: ${{ inputs.embedding_model }}
+      CORAMAIL_LLM_MAX_OUTPUT_TOKENS: "1024"
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: Require real LLM credentials
+        shell: bash
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo 'GEMINI_API_KEY repository secret is required for the live-stack E2E workflow.' >&2
+            exit 2
+          fi
+      - name: Sync dependencies
+        run: uv sync --frozen
+      - name: Bootstrap real PostgreSQL and Qdrant
+        run: uv run python -m app.tools.bootstrap_dev_environment
+      - name: Run real Postgres + Qdrant + LLM Mail Decision E2E
+        run: uv run python scripts/run_live_stack_e2e.py

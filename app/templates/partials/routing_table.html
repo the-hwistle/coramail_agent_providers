@@ -1,0 +1,219 @@
+<section id="routingTablePanel" class="settings-routing-manage">
+  <div class="table-wrap routing-table-wrap">
+    <table class="routing-table">
+        <thead>
+          <tr>
+            <th>담당자</th>
+            <th>부서</th>
+            <th>직급</th>
+            <th>Email</th>
+            <th class="routing-label-col">담당 카테고리</th>
+            <th class="routing-manage-col">담당자 관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="routing-create-row">
+            <td><input class="input" form="routing-assignee-new" name="assignee_name" placeholder="담당자 이름"></td>
+            <td><input class="input" form="routing-assignee-new" name="department" placeholder="부서"></td>
+            <td><input class="input" form="routing-assignee-new" name="position" placeholder="직급"></td>
+            <td><input class="input" type="email" form="routing-assignee-new" name="email_address" placeholder="email@domain.com"></td>
+            <td class="routing-label-cell">
+              <div class="routing-select-shell routing-select-shell--label">
+                <select class="input compact routing-select routing-label-select" form="routing-assignee-new" name="mail_category">
+                  {% for value in routing_table_options.mail_categories or routing_table_options.business_labels %}
+                    <option value="{{ value }}">{{ routing_label_text(value) }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </td>
+            <td>
+              <button class="icon-btn" type="submit" form="routing-assignee-new" title="Add assignee" aria-label="담당자 추가">
+                <span class="material-symbols-outlined">add</span>
+              </button>
+            </td>
+          </tr>
+
+          {% for assignee in assignees %}
+            <tr
+              class="routing-assignee-row {% if assignee.is_synthetic %}is-synthetic{% endif %} {% if not assignee.is_active %}is-inactive{% endif %}"
+              {% if assignee.is_synthetic %}data-synthetic-assignee{% endif %}
+            >
+              <td>
+                <div class="assignee-primary-row">
+                  <div class="assignee-primary" data-assignee-display-name="{{ assignee.assignee_id }}">{{ assignee.assignee_name or "-" }}</div>
+                  {% if assignee.is_synthetic %}
+                  <span class="routing-synthetic-badge">합성</span>
+                  {% endif %}
+                </div>
+                {% if assignee.is_synthetic %}
+                <span class="routing-synthetic-meta">capability {{ assignee.capability_count }}</span>
+                {% endif %}
+              </td>
+              <td data-assignee-display-department="{{ assignee.assignee_id }}">{{ assignee.department or "-" }}</td>
+              <td data-assignee-display-position="{{ assignee.assignee_id }}">{{ assignee.position or "-" }}</td>
+              <td><span class="mono" data-assignee-display-email="{{ assignee.assignee_id }}">{{ assignee.email_address or "-" }}</span></td>
+              <td class="routing-label-cell">
+                {% if assignee.is_synthetic %}
+                <div class="routing-labels-inline">
+                  {% for value in assignee.mail_categories or assignee.business_labels %}
+                  <span class="routing-label-chip compact">{{ routing_label_text(value) }}</span>
+                  {% else %}
+                  <span class="routing-synthetic-meta">카테고리 없음</span>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="routing-select-shell routing-select-shell--label">
+                  <select
+                    class="input compact routing-select routing-label-select"
+                    name="mail_category"
+                    data-assignee-field="{{ assignee.assignee_id }}"
+                    hx-post="/ui/settings/routing-table/{{ assignee.assignee_id }}/autosave"
+                    hx-trigger="change"
+                    hx-include="[data-assignee-field='{{ assignee.assignee_id }}']"
+                    hx-swap="none"
+                  >
+                    {% for value in routing_table_options.mail_categories or routing_table_options.business_labels %}
+                      <option value="{{ value }}" {% if value in (assignee.mail_categories or assignee.business_labels) %}selected{% endif %}>
+                        {{ routing_label_text(value) }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                {% endif %}
+              </td>
+              <td class="routing-actions">
+                {% if assignee.is_synthetic %}
+                <span class="routing-readonly-state" title="평가용 합성 데이터는 이 화면에서 변경할 수 없습니다.">
+                  <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                  읽기 전용
+                </span>
+                {% else %}
+                <button
+                  class="icon-btn routing-edit-btn"
+                  type="button"
+                  title="Edit assignee info"
+                  aria-label="담당자 정보 편집"
+                  data-assignee-editor-toggle
+                  data-assignee-editor-id="{{ assignee.assignee_id }}"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  class="icon-btn danger"
+                  type="button"
+                  title="Delete assignee"
+                  aria-label="담당자 삭제"
+                  hx-post="/ui/settings/routing-table/{{ assignee.assignee_id }}/delete"
+                  hx-target="#routingTablePanel"
+                  hx-swap="outerHTML"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% if not assignee.is_synthetic %}
+            <tr class="assignee-editor-row is-hidden" data-assignee-editor-row="{{ assignee.assignee_id }}">
+              <td colspan="6">
+                <div class="assignee-editor-card">
+                  <div class="assignee-editor-head">
+                    <strong>담당자 정보 편집</strong>
+                    <span class="subtle" id="routing-assignee-status-{{ assignee.assignee_id }}">자동 저장 대기</span>
+                  </div>
+                  <div class="assignee-editor-grid">
+                    <label>
+                      <span>담당자</span>
+                      <input
+                        class="input"
+                        name="assignee_name"
+                        value="{{ assignee.assignee_name }}"
+                        placeholder="담당자 이름"
+                        data-assignee-field="{{ assignee.assignee_id }}"
+                        data-assignee-sync="name"
+                        data-assignee-id="{{ assignee.assignee_id }}"
+                        hx-post="/ui/settings/routing-table/{{ assignee.assignee_id }}/autosave"
+                        hx-trigger="input changed delay:500ms, change"
+                        hx-include="[data-assignee-field='{{ assignee.assignee_id }}']"
+                        hx-swap="none"
+                      >
+                    </label>
+                    <label>
+                      <span>부서</span>
+                      <input
+                        class="input"
+                        name="department"
+                        value="{{ assignee.department }}"
+                        placeholder="부서"
+                        data-assignee-field="{{ assignee.assignee_id }}"
+                        data-assignee-sync="department"
+                        data-assignee-id="{{ assignee.assignee_id }}"
+                        hx-post="/ui/settings/routing-table/{{ assignee.assignee_id }}/autosave"
+                        hx-trigger="input changed delay:500ms, change"
+                        hx-include="[data-assignee-field='{{ assignee.assignee_id }}']"
+                        hx-swap="none"
+                      >
+                    </label>
+                    <label>
+                      <span>직급</span>
+                      <input
+                        class="input"
+                        name="position"
+                        value="{{ assignee.position }}"
+                        placeholder="직급 또는 역할"
+                        data-assignee-field="{{ assignee.assignee_id }}"
+                        data-assignee-sync="position"
+                        data-assignee-id="{{ assignee.assignee_id }}"
+                        hx-post="/ui/settings/routing-table/{{ assignee.assignee_id }}/autosave"
+                        hx-trigger="input changed delay:500ms, change"
+                        hx-include="[data-assignee-field='{{ assignee.assignee_id }}']"
+                        hx-swap="none"
+                      >
+                    </label>
+                    <label>
+                      <span>Email</span>
+                      <input
+                        class="input"
+                        type="email"
+                        name="email_address"
+                        value="{{ assignee.email_address }}"
+                        placeholder="name@company.com"
+                        data-assignee-field="{{ assignee.assignee_id }}"
+                        data-assignee-sync="email"
+                        data-assignee-id="{{ assignee.assignee_id }}"
+                        hx-post="/ui/settings/routing-table/{{ assignee.assignee_id }}/autosave"
+                        hx-trigger="input changed delay:500ms, change"
+                        hx-include="[data-assignee-field='{{ assignee.assignee_id }}']"
+                        hx-swap="none"
+                      >
+                    </label>
+                  </div>
+                  <div class="assignee-editor-actions">
+                    <button
+                      class="btn secondary"
+                      type="button"
+                      data-assignee-editor-toggle
+                      data-assignee-editor-id="{{ assignee.assignee_id }}"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+          {% else %}
+            <tr>
+              <td colspan="6" class="empty-cell">등록된 담당자가 없습니다.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+  </div>
+
+  <form
+    id="routing-assignee-new"
+    hx-post="/ui/settings/routing-table"
+    hx-target="#routingTablePanel"
+    hx-swap="outerHTML"
+  ></form>
+</section>

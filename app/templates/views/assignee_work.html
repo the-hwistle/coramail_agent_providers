@@ -1,0 +1,397 @@
+{% from "macros.html" import category_chip with context %}
+{% set summary = assignee_summary or {} %}
+{% set selected = selected_assignee or {} %}
+{% set work_endpoint = assignee_work_endpoint or "/ui/assignees" %}
+{% set visible_rows = assignee_rows or [] %}
+{% set selected_work = selected_assignee_work or (visible_rows[0] if visible_rows else {}) %}
+{% set selected_classification = selected_work.classification or {} %}
+{% set selected_label = selected_work.mail_category or mail_category(selected_classification) if selected_work else "" %}
+{% set header_title = selected.name if assignee_work_view_name == "my-work" and selected.name else (assignee_work_title or selected.name or ("Assignments" if assignee_scope_all else "My Work")) %}
+<section class="view page-view assignee-work-view" data-view="{{ assignee_work_view_name or 'assignees' }}">
+  <div class="assignee-work-command">
+    <div class="assignee-work-title">
+      <span class="material-symbols-outlined" aria-hidden="true">assignment_ind</span>
+      <div>
+        <h1>{{ header_title }}</h1>
+        {% if selected.email %}
+          <span class="mono">{{ selected.email }}</span>
+        {% elif not assignee_scope_all %}
+          <span>내 권한 범위</span>
+        {% else %}
+          <span>전체 담당자 업무 현황</span>
+        {% endif %}
+      </div>
+    </div>
+    <form
+      class="assignee-work-filters"
+      hx-get="{{ work_endpoint }}"
+      hx-trigger="keyup changed delay:400ms from:#assigneeWorkSearch, change from:#assigneeWorkCategory"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <input type="hidden" name="assignee" value="{{ assignee_query or '' }}">
+      <input type="hidden" name="status" value="{{ selected_work_status or '' }}">
+      <label class="sr-only" for="assigneeWorkSearch">담당 메일 검색</label>
+      <input
+        class="input"
+        id="assigneeWorkSearch"
+        name="q"
+        placeholder="제목, 발신자, 키워드 검색"
+        value="{{ assignee_search_query or '' }}"
+      >
+      <label class="sr-only" for="assigneeWorkCategory">업무 유형</label>
+      <select class="input" id="assigneeWorkCategory" name="category">
+        <option value="">전체 업무</option>
+        {% for category in category_order %}
+          <option value="{{ category }}"{% if selected_category == category %} selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="assignee-work-stats" aria-label="담당자 업무 요약">
+    <button
+      type="button"
+      class="assignee-work-stat assignee-work-stat--primary{% if selected_work_status == 'assigned' %} is-active{% endif %}"
+      hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=assigned"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">mark_email_unread</span>
+      <span class="assignee-work-stat-copy">미확인</span>
+      <span class="sr-only">배정 메일</span>
+      <strong>{{ summary.unacknowledged_count or 0 }}</strong>
+    </button>
+    <button
+      type="button"
+      class="assignee-work-stat{% if selected_work_status == 'acknowledged' %} is-active{% endif %}"
+      hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=acknowledged"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">drafts</span>
+      <span class="assignee-work-stat-copy">확인함</span>
+      <span class="sr-only">확인한 업무</span>
+      <strong>{{ summary.acknowledged_count or 0 }}</strong>
+    </button>
+    <button
+      type="button"
+      class="assignee-work-stat{% if selected_work_status == 'in_progress' %} is-active{% endif %}"
+      hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=in_progress"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
+      <span class="assignee-work-stat-copy">진행중</span>
+      <span class="sr-only">진행중 업무</span>
+      <strong>{{ summary.in_progress_count or 0 }}</strong>
+    </button>
+    <button
+      type="button"
+      class="assignee-work-stat{% if selected_work_status == 'responded' %} is-active{% endif %}"
+      hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=responded"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">outgoing_mail</span>
+      <span class="assignee-work-stat-copy">회신함</span>
+      <span class="sr-only">긴급 메일</span>
+      <strong>{{ summary.responded_count or 0 }}</strong>
+    </button>
+    <button
+      type="button"
+      class="assignee-work-stat{% if selected_work_status == 'completed' %} is-active{% endif %}"
+      hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=completed"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+      <span class="assignee-work-stat-copy">완료</span>
+      <span class="sr-only">전달 완료</span>
+      <strong>{{ summary.completed_count or 0 }}</strong>
+    </button>
+  </div>
+
+  <div class="assignee-work-layout">
+    <aside class="work-queue-rail" aria-label="업무 큐">
+      <div class="work-queue-head">
+        <strong>업무 큐</strong>
+      </div>
+      <div class="work-queue-group">
+        <button
+          type="button"
+          class="work-queue-item{% if not selected_work_status %} is-active{% endif %}"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="work-queue-dot work-queue-dot--all"></span>
+          <span>전체 업무</span>
+          <strong>{{ summary.mail_count or 0 }}</strong>
+        </button>
+        <button
+          type="button"
+          class="work-queue-item{% if selected_work_status == 'assigned' %} is-active{% endif %}"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=assigned"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="work-queue-dot work-queue-dot--urgent"></span>
+          <span>미확인</span>
+          <strong>{{ summary.unacknowledged_count or 0 }}</strong>
+        </button>
+        <button
+          type="button"
+          class="work-queue-item{% if selected_work_status == 'acknowledged' %} is-active{% endif %}"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=acknowledged"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="work-queue-dot work-queue-dot--acknowledged"></span>
+          <span>확인함</span>
+          <strong>{{ summary.acknowledged_count or 0 }}</strong>
+        </button>
+        <button
+          type="button"
+          class="work-queue-item{% if selected_work_status == 'in_progress' %} is-active{% endif %}"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=in_progress"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="work-queue-dot work-queue-dot--progress"></span>
+          <span>진행중</span>
+          <strong>{{ summary.in_progress_count or 0 }}</strong>
+        </button>
+        <button
+          type="button"
+          class="work-queue-item{% if selected_work_status == 'responded' %} is-active{% endif %}"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=responded"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="work-queue-dot work-queue-dot--responded"></span>
+          <span>회신함</span>
+          <strong>{{ summary.responded_count or 0 }}</strong>
+        </button>
+        <button
+          type="button"
+          class="work-queue-item{% if selected_work_status == 'completed' %} is-active{% endif %}"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status=completed"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="work-queue-dot work-queue-dot--done"></span>
+          <span>완료</span>
+          <strong>{{ summary.completed_count or 0 }}</strong>
+        </button>
+      </div>
+      {% if assignees|length > 1 %}
+        <div class="work-queue-assignees">
+          <div class="work-queue-section-label">담당자 범위</div>
+          {% if assignee_scope_all %}
+            <button
+              type="button"
+              class="assignee-roster-item{% if not assignee_query %} is-active{% endif %}"
+              hx-get="{{ work_endpoint }}?q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}"
+              hx-target="#main-panel"
+              hx-swap="innerHTML"
+              title="전체 담당자"
+            >
+              <span class="assignee-roster-name">전체 담당자</span>
+              <strong>{{ summary.mail_count or 0 }}</strong>
+            </button>
+          {% endif %}
+          {% for item in assignees %}
+            <button
+              type="button"
+              class="assignee-roster-item{% if item.name == selected.name or item.value == assignee_query %} is-active{% endif %}"
+              hx-get="{{ work_endpoint }}?assignee={{ item.value|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}"
+              hx-target="#main-panel"
+              hx-swap="innerHTML"
+              title="{{ item.email or item.name }}"
+            >
+              <span class="assignee-roster-name">{{ item.name }}</span>
+              <strong>{{ item.count }}</strong>
+            </button>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </aside>
+
+    <section class="panel assignee-mail-panel">
+      <div class="assignee-mail-panel-head">
+        <h2>현재 할당 업무</h2>
+        <button
+          type="button"
+          class="icon-btn"
+          title="새로고침"
+          aria-label="현재 업무 새로고침"
+          hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status={{ selected_work_status|urlencode }}"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+        >
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
+      </div>
+      <div class="table-wrap assignee-mail-table-wrap">
+        <table class="assignee-mail-table">
+          <colgroup>
+            <col class="assignee-status-col">
+            <col class="assignee-sender-col">
+            <col class="assignee-subject-col">
+            <col class="assignee-category-col">
+            <col class="assignee-time-col">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>상태</th>
+              <th>발신자</th>
+              <th>제목</th>
+              <th>업무 유형</th>
+              <th>수신일시</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for email in visible_rows %}
+              {% set classification = email.classification or {} %}
+              {% set label = email.mail_category or mail_category(classification) %}
+              {% set state = email.work_status or email.classification_state or "unclassified" %}
+              {% set attention_quadrant = email.attention_quadrant or classification.attention_quadrant or "normal" %}
+              <tr
+                class="clickable-row{% if email.email_uid == selected_assignee_work_uid %} is-selected{% endif %}{% if attention_quadrant == 'urgent_important' %} is-attention-urgent-important{% elif attention_quadrant == 'urgent' %} is-attention-urgent{% elif attention_quadrant == 'important' %} is-attention-important{% endif %}"
+                hx-get="{{ work_endpoint }}?assignee={{ assignee_query|urlencode }}&q={{ assignee_search_query|urlencode }}&category={{ selected_category|urlencode }}&status={{ selected_work_status|urlencode }}&selected_email_uid={{ email.email_uid|urlencode }}"
+                hx-target="#main-panel"
+                hx-swap="innerHTML"
+              >
+                <td>
+                  <span class="row-status {{ state }}">
+                    <span class="material-symbols-outlined">
+                      {% if state == "completed" %}task_alt{% elif state == "forwarded" %}forward_to_inbox{% elif state == "responded" %}outgoing_mail{% elif state == "in_progress" %}pending_actions{% elif state == "auto_assigned" or state == "assigned" %}assignment_turned_in{% elif state == "review_required" %}rate_review{% elif state == "running" or state == "cancelling" %}progress_activity{% elif state == "queued" %}schedule{% elif state == "failed" %}error{% elif state == "cancelled" %}delete{% else %}pending{% endif %}
+                    </span>
+                    {{ email.work_status_label or email.classification_state_label or state }}
+                  </span>
+                </td>
+                <td class="truncate" title="{{ display_sender_name(email) }}">
+                  <strong>{{ display_sender_name(email) }}</strong>
+                </td>
+                <td class="assignee-subject-cell" title="{{ email.subject or '(no subject)' }}">
+                  <strong>{{ email.subject or "(no subject)" }}</strong>
+                  {% if email.business_refs %}
+                    <span>{{ email.business_refs[:2] | join(", ") }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ category_chip(label) }}</td>
+                <td class="mono" title="{{ format_mail_datetime(email.date or email.received_at or email.created_at) }}">
+                  {{ format_mail_table_time(email.date or email.received_at or email.created_at) }}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="5" class="empty-cell">현재 조건에 맞는 업무 메일이 없습니다.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="assignee-next-panel" aria-label="선택된 업무">
+      <div class="assignee-next-panel-head">
+        <strong>선택된 업무</strong>
+        {% if selected_work and current_user_id and selected_work.assignee_user_id and current_user_id == selected_work.assignee_user_id and selected_work.work_status != "completed" %}
+          <button
+            type="button"
+            class="work-progress-toggle{% if selected_work.work_status == 'in_progress' %} is-active{% endif %}"
+            hx-post="/ui/emails/{{ selected_work.email_uid|urlencode }}/work/in-progress"
+            hx-vals='{"active": "{{ "false" if selected_work.work_status == "in_progress" else "true" }}"}'
+            hx-swap="none"
+            {% if selected_work.work_status not in ["assigned", "acknowledged", "in_progress"] %}disabled aria-disabled="true"{% endif %}
+            aria-label="{{ '진행 표시 해제' if selected_work.work_status == 'in_progress' else '진행 표시 설정' }}"
+            title="{{ '진행 표시 해제' if selected_work.work_status == 'in_progress' else '진행 표시 설정' }}"
+            data-work-in-progress-toggle
+          >
+            <span class="material-symbols-outlined">{{ "toggle_on" if selected_work.work_status == "in_progress" else "toggle_off" }}</span>
+          </button>
+        {% else %}
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        {% endif %}
+      </div>
+      {% if selected_work %}
+        <div class="assignee-next-summary">
+          <span class="row-status {{ selected_work.work_status or selected_work.classification_state or 'unclassified' }}">
+            {{ selected_work.work_status_label or selected_work.classification_state_label or selected_work.work_status or "상태 미상" }}
+          </span>
+          <h2>{{ selected_work.subject or "(no subject)" }}</h2>
+          <p>{{ display_sender_name(selected_work) }}{% if display_sender_address(selected_work) %} · {{ display_sender_address(selected_work) }}{% endif %}</p>
+        </div>
+        <dl class="assignee-next-meta">
+          <div>
+            <dt>업무 유형</dt>
+            <dd>{{ category_chip(selected_label) }}</dd>
+          </div>
+          <div>
+            <dt>수신일시</dt>
+            <dd class="mono">{{ format_mail_table_time(selected_work.date or selected_work.received_at or selected_work.created_at) }}</dd>
+          </div>
+          <div>
+            <dt>담당자</dt>
+            <dd>{{ selected.name or selected_work.assignee_name or selected_work.routing_display or "미지정" }}</dd>
+          </div>
+        </dl>
+        <div class="assignee-next-note">
+          <strong>요청 내용 요약</strong>
+          <p>{{ selected_work.summary or selected_classification.summary or selected_work.snippet or "요약 정보가 없습니다. 상세 화면에서 원문과 판단 근거를 확인하세요." }}</p>
+        </div>
+        {% if selected_work.business_refs %}
+          <div class="assignee-next-evidence">
+            <strong>업무 참조</strong>
+            {% for ref in selected_work.business_refs[:3] %}
+              <span>{{ ref }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <div class="assignee-next-actions" id="assigneeDetailPreview">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            hx-get="/ui/my-work/emails/{{ selected_work.email_uid|urlencode }}"
+            hx-target="#assigneeEmailDetailDrawer"
+            hx-swap="innerHTML"
+            data-assignee-detail-open
+          >
+            <span class="material-symbols-outlined">open_in_new</span>
+            상세 열기
+          </button>
+          {% if current_user_id and selected_work.assignee_user_id and current_user_id == selected_work.assignee_user_id and selected_work.work_status != "completed" %}
+            <button
+              type="button"
+              class="btn btn-secondary"
+              hx-post="/ui/emails/{{ selected_work.email_uid|urlencode }}/work/reply-initiate"
+              hx-swap="none"
+            >
+              <span class="material-symbols-outlined">reply</span>
+              답장
+            </button>
+            <button
+              type="button"
+              class="btn"
+              hx-post="/ui/emails/{{ selected_work.email_uid|urlencode }}/work/complete"
+              hx-swap="none"
+              hx-confirm="이 업무를 완료 처리하시겠습니까?"
+              data-work-complete-button
+            >
+              <span class="material-symbols-outlined">task_alt</span>
+              업무 완료
+            </button>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="assignee-next-empty">
+          <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+          <strong>표시할 업무가 없습니다.</strong>
+        </div>
+      {% endif %}
+    </aside>
+    <aside class="assignee-detail-drawer" id="assigneeEmailDetailDrawer" aria-live="polite" hidden></aside>
+  </div>
+</section>

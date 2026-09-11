@@ -1,0 +1,53 @@
+{% from "macros.html" import category_chip with context %}
+{% if address_book_profiles %}
+  <div class="address-book-grid">
+    {% for profile in address_book_profiles %}
+      <article class="address-card">
+        <header class="address-card-head">
+          <div class="address-avatar" aria-hidden="true">{{ (profile.sender_name or profile.sender_address)[:1] }}</div>
+          <div>
+            <h2>{{ profile.sender_name }}</h2>
+            <p class="mono">{{ profile.sender_address }}</p>
+          </div>
+        </header>
+        <dl class="address-meta">
+          <div>
+            <dt>소속</dt>
+            <dd>{{ profile.organization }}</dd>
+          </div>
+          <div>
+            <dt>최근 일시</dt>
+            <dd>{{ format_mail_datetime(profile.last_seen) if profile.last_seen else "-" }}</dd>
+          </div>
+        </dl>
+        <div class="address-history">
+          <h3>이전 이메일 스레드</h3>
+          <ol>
+            {% for email in profile.recent_emails %}
+              <li>
+                <button
+                  type="button"
+                  hx-post="/ui/inbox?email_uid={{ email.email_uid }}"
+                  hx-target="#main-panel"
+                  hx-swap="innerHTML"
+                  hx-sync="#main-panel:replace"
+                >
+                  <span class="address-history-subject">{{ email.subject }}</span>
+                  <span class="address-history-meta">
+                    <span class="address-history-time">{{ format_mail_table_time(email.date) if email.date else "-" }}</span>
+                    {{ category_chip(email.mail_category) }}
+                  </span>
+                </button>
+              </li>
+            {% endfor %}
+          </ol>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <section class="panel address-empty">
+    <span class="material-symbols-outlined" aria-hidden="true">contacts</span>
+    <strong>주소록에 표시할 발신자가 없습니다.</strong>
+  </section>
+{% endif %}

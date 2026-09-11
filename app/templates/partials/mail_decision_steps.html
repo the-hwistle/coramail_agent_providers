@@ -1,0 +1,26 @@
+<div id="mail-decision-steps" class="mail-decision-steps">
+  <div class="mail-decision-section-title">실행 과정</div>
+  {% if panel and panel.steps_error %}
+    <p class="subtle">{{ panel.steps_error }}</p>
+  {% elif steps %}
+    <div class="mail-decision-step-list">
+      {% for step in steps %}
+        <div class="mail-decision-step-item">
+          <div class="mail-decision-step-main">
+            <strong>{{ step.label }}</strong>
+            <span class="status-badge status-badge--compact {{ step.status_class }}">{{ step.status_label }}</span>
+          </div>
+          <div class="info-submeta">
+            <span>started {{ step.started_at_label }}</span>
+            <span>completed {{ step.completed_at_label }}</span>
+          </div>
+          {% if step.error_label %}
+            <div class="notice danger mail-decision-step-error">{{ step.error_label }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="subtle">표시할 step이 아직 없습니다.</p>
+  {% endif %}
+</div>

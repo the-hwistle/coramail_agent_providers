@@ -1,0 +1,200 @@
+name: coramail-agent-dev
+
+services:
+  web:
+    build:
+      context: .
+    command: >
+      sh -c "python -m app.tools.bootstrap_dev_environment &&
+      exec python -m uvicorn app.server:app --host 0.0.0.0 --port ${CORAMAIL_DEV_PORT:-8000}"
+    restart: unless-stopped
+    environment:
+      CORAMAIL_ENV_FILE: /app/.env
+      CORAMAIL_DEMO_MODE: ${CORAMAIL_DEMO_MODE:-false}
+      CORAMAIL_DEMO_SOURCE: ${CORAMAIL_DEMO_SOURCE:-postgres}
+      CORAMAIL_LOCAL_DEV_DEFAULTS: "false"
+      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail}
+      CORAMAIL_QDRANT_URL: http://qdrant:6333
+      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_clean_v2}
+      CORAMAIL_QDRANT_VECTOR_SIZE: ${CORAMAIL_QDRANT_VECTOR_SIZE:-768}
+      CORAMAIL_DEV_SEED_DEMO: ${CORAMAIL_DEV_SEED_DEMO:-true}
+      CORAMAIL_DEV_WAIT_SECONDS: ${CORAMAIL_DEV_WAIT_SECONDS:-90}
+      CORAMAIL_LLM_PROVIDER: ${CORAMAIL_LLM_PROVIDER:-ollama}
+      CORAMAIL_TEXT_LLM_PROVIDER: ${CORAMAIL_TEXT_LLM_PROVIDER:-}
+      CORAMAIL_VISION_LLM_PROVIDER: ${CORAMAIL_VISION_LLM_PROVIDER:-}
+      CORAMAIL_EMBEDDING_PROVIDER: ${CORAMAIL_EMBEDDING_PROVIDER:-}
+      CORAMAIL_LLM_BASE_URL: ${CORAMAIL_CONTAINER_LLM_BASE_URL:-http://ollama:11434/v1}
+      CORAMAIL_TEXT_LLM_BASE_URL: ${CORAMAIL_CONTAINER_TEXT_LLM_BASE_URL:-}
+      CORAMAIL_VISION_LLM_BASE_URL: ${CORAMAIL_CONTAINER_VISION_LLM_BASE_URL:-}
+      CORAMAIL_EMBEDDING_BASE_URL: ${CORAMAIL_CONTAINER_EMBEDDING_BASE_URL:-}
+      CORAMAIL_TEXT_MODEL: ${CORAMAIL_TEXT_MODEL:-llama3.2:latest}
+      CORAMAIL_CHAT_TEXT_MODEL: ${CORAMAIL_CHAT_TEXT_MODEL:-}
+      CORAMAIL_VISION_MODEL: ${CORAMAIL_VISION_MODEL:-qwen2.5vl:7b}
+      CORAMAIL_EMBEDDING_MODEL: ${CORAMAIL_EMBEDDING_MODEL:-nomic-embed-text:latest}
+      CORAMAIL_LLM_MAX_CONCURRENCY: ${CORAMAIL_LLM_MAX_CONCURRENCY:-4}
+      CORAMAIL_TEXT_LLM_MAX_CONCURRENCY: ${CORAMAIL_TEXT_LLM_MAX_CONCURRENCY:-4}
+      CORAMAIL_VISION_LLM_MAX_CONCURRENCY: ${CORAMAIL_VISION_LLM_MAX_CONCURRENCY:-2}
+      CORAMAIL_EMBEDDING_LLM_MAX_CONCURRENCY: ${CORAMAIL_EMBEDDING_LLM_MAX_CONCURRENCY:-8}
+      CORAMAIL_LLM_MAX_OUTPUT_TOKENS: ${CORAMAIL_LLM_MAX_OUTPUT_TOKENS:-1024}
+      CORAMAIL_PADDLEOCR_ENABLED: ${CORAMAIL_PADDLEOCR_ENABLED:-auto}
+      CORAMAIL_PADDLEOCR_MODE: ${CORAMAIL_PADDLEOCR_MODE:-auto}
+      CORAMAIL_PADDLEOCR_DEVICE: ${CORAMAIL_PADDLEOCR_DEVICE:-gpu}
+      CORAMAIL_PADDLEOCR_DOC_ORIENTATION: ${CORAMAIL_PADDLEOCR_DOC_ORIENTATION:-false}
+      CORAMAIL_PADDLEOCR_DOC_UNWARPING: ${CORAMAIL_PADDLEOCR_DOC_UNWARPING:-false}
+      CORAMAIL_PADDLEOCR_TEXTLINE_ORIENTATION: ${CORAMAIL_PADDLEOCR_TEXTLINE_ORIENTATION:-false}
+      CORAMAIL_PADDLEOCR_TABLE_ORIENTATION: ${CORAMAIL_PADDLEOCR_TABLE_ORIENTATION:-false}
+      CORAMAIL_PADDLEOCR_MKLDNN: ${CORAMAIL_PADDLEOCR_MKLDNN:-false}
+      PADDLE_PDX_CACHE_HOME: ${PADDLE_PDX_CACHE_HOME:-/tmp/coramail-paddlex-cache}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    gpus: all
+    ports:
+      - "${CORAMAIL_DEV_PORT:-8000}:${CORAMAIL_DEV_PORT:-8000}"
+    volumes:
+      - .:/app
+      - coramail_uv_cache:/root/.cache/uv
+      - coramail_paddlex_cache:/tmp/coramail-paddlex-cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+
+  bootstrap:
+    build:
+      context: .
+    command: ["python", "-m", "app.tools.bootstrap_dev_environment"]
+    profiles:
+      - tools
+    restart: "no"
+    environment:
+      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail}
+      CORAMAIL_QDRANT_URL: http://qdrant:6333
+      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_clean_v2}
+      CORAMAIL_QDRANT_VECTOR_SIZE: ${CORAMAIL_QDRANT_VECTOR_SIZE:-768}
+      CORAMAIL_DEV_SEED_DEMO: ${CORAMAIL_DEV_SEED_DEMO:-true}
+      CORAMAIL_DEV_WAIT_SECONDS: ${CORAMAIL_DEV_WAIT_SECONDS:-90}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+  postgres:
+    image: ${CORAMAIL_POSTGRES_IMAGE:-postgres:17}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CORAMAIL_POSTGRES_DB:-coramail}
+      POSTGRES_USER: ${CORAMAIL_POSTGRES_USER:-coramail}
+      POSTGRES_PASSWORD: ${CORAMAIL_POSTGRES_PASSWORD:-coramail}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${CORAMAIL_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - coramail_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  qdrant:
+    image: ${CORAMAIL_QDRANT_IMAGE:-qdrant/qdrant:latest}
+    restart: unless-stopped
+    ports:
+      - "${CORAMAIL_QDRANT_HTTP_PORT:-6333}:6333"
+      - "${CORAMAIL_QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - coramail_qdrant_data:/qdrant/storage
+
+  ollama:
+    image: ${CORAMAIL_OLLAMA_IMAGE:-ollama/ollama:latest}
+    restart: unless-stopped
+    gpus: all
+    environment:
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-10m}
+    ports:
+      - "${CORAMAIL_OLLAMA_PORT:-11435}:11434"
+    volumes:
+      - coramail_ollama_data:/root/.ollama
+
+  vllm-text:
+    image: ${CORAMAIL_VLLM_IMAGE:-vllm/vllm-openai:latest}
+    profiles:
+      - vllm
+    restart: unless-stopped
+    ipc: host
+    gpus: all
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_ENABLE_CUDA_COMPATIBILITY: ${VLLM_ENABLE_CUDA_COMPATIBILITY:-1}
+      VLLM_WSL2_ENABLE_PIN_MEMORY: ${VLLM_WSL2_ENABLE_PIN_MEMORY:-0}
+      VLLM_WORKER_MULTIPROC_METHOD: ${VLLM_WORKER_MULTIPROC_METHOD:-spawn}
+    command:
+      - --model
+      - ${CORAMAIL_VLLM_TEXT_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      - --served-model-name
+      - ${CORAMAIL_TEXT_MODEL:-qwen2.5-7b-awq}
+      - --max-model-len
+      - ${CORAMAIL_VLLM_TEXT_MAX_MODEL_LEN:-4096}
+      - --gpu-memory-utilization
+      - ${CORAMAIL_VLLM_TEXT_GPU_MEMORY_UTILIZATION:-0.75}
+    ports:
+      - "${CORAMAIL_VLLM_TEXT_PORT:-8001}:8000"
+    volumes:
+      - coramail_hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/models', timeout=2).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  vllm-embedding:
+    image: ${CORAMAIL_VLLM_IMAGE:-vllm/vllm-openai:latest}
+    profiles:
+      - vllm-embedding
+    restart: unless-stopped
+    ipc: host
+    gpus: all
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_ENABLE_CUDA_COMPATIBILITY: ${VLLM_ENABLE_CUDA_COMPATIBILITY:-1}
+      VLLM_WSL2_ENABLE_PIN_MEMORY: ${VLLM_WSL2_ENABLE_PIN_MEMORY:-0}
+      VLLM_WORKER_MULTIPROC_METHOD: ${VLLM_WORKER_MULTIPROC_METHOD:-spawn}
+    command:
+      - --model
+      - ${CORAMAIL_VLLM_EMBEDDING_MODEL:-BAAI/bge-m3}
+      - --served-model-name
+      - ${CORAMAIL_EMBEDDING_MODEL:-bge-m3}
+      - --task
+      - embed
+      - --gpu-memory-utilization
+      - ${CORAMAIL_VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION:-0.20}
+    ports:
+      - "${CORAMAIL_VLLM_EMBEDDING_PORT:-8002}:8000"
+    volumes:
+      - coramail_hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/models', timeout=2).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+volumes:
+  coramail_postgres_data:
+  coramail_qdrant_data:
+  coramail_ollama_data:
+  coramail_hf_cache:
+  coramail_paddlex_cache:
+  coramail_uv_cache:

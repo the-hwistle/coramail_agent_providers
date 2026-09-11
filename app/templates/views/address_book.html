@@ -1,0 +1,49 @@
+<section class="view page-view address-book-view" data-view="address-book">
+  <div class="address-book-toolbar" aria-label="주소록 검색">
+    <div>
+      <h1>주소록</h1>
+      <div class="address-organization-filter" aria-label="소속 필터">
+        <button
+          type="button"
+          class="address-organization-chip{% if not selected_organization %} is-active{% endif %}"
+          hx-post="/ui/address-book{% if query %}?q={{ query|urlencode }}{% endif %}"
+          hx-target="#main-panel"
+          hx-swap="innerHTML"
+          hx-sync="#main-panel:replace"
+        >전체</button>
+        {% for organization in address_book_organizations %}
+          <button
+            type="button"
+            class="address-organization-chip{% if selected_organization == organization.label %} is-active{% endif %}"
+            hx-post="/ui/address-book?organization={{ organization.label|urlencode }}{% if query %}&q={{ query|urlencode }}{% endif %}"
+            hx-target="#main-panel"
+            hx-swap="innerHTML"
+            hx-sync="#main-panel:replace"
+          >{{ organization.label }} <span>{{ organization.count }}</span></button>
+        {% endfor %}
+      </div>
+    </div>
+    <form
+      class="address-book-search"
+      action="/ui/address-book"
+      method="get"
+      hx-get="/ui/address-book-list"
+      hx-target="#addressBookList"
+      hx-trigger="keyup changed delay:300ms, submit"
+    >
+      <label class="sr-only" for="addressBookSearch">주소록 검색</label>
+      <input type="hidden" name="organization" value="{{ selected_organization or '' }}">
+      <input
+        class="input"
+        id="addressBookSearch"
+        name="q"
+        placeholder="발신자, 이메일, 거래처, 제목 검색"
+        value="{{ query or '' }}"
+      >
+    </form>
+  </div>
+
+  <div id="addressBookList">
+    {% include "partials/address_book_list.html" %}
+  </div>
+</section>

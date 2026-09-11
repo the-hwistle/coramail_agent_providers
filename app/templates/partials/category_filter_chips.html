@@ -1,0 +1,22 @@
+<div class="chip-legend mail-category-filter mail-status-filter{% if compact_filter_legend | default(false) %} compact{% endif %}" aria-label="메일 유형 필터">
+  <span class="mail-status-filter-highlight" aria-hidden="true"></span>
+  <button
+    type="button"
+    class="mail-status-filter-btn category-filter-chip is-active"
+    data-category-filter="__all__"
+    aria-pressed="true"
+  >
+    전체
+  </button>
+
+  {% for category in category_order %}
+    <button
+      type="button"
+      class="mail-status-filter-btn category-filter-chip"
+      data-category-filter="{{ category }}"
+      aria-pressed="false"
+    >
+      {{ category }}
+    </button>
+  {% endfor %}
+</div>

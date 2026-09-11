@@ -1,0 +1,121 @@
+{% from "macros.html" import category_chip, info_tooltip with context %}
+{% set status_options = work_status_filter_options or [
+  {"value": "assigned", "label": "미확인"},
+  {"value": "acknowledged", "label": "확인함"},
+  {"value": "in_progress", "label": "진행중"},
+  {"value": "responded", "label": "회신함"},
+  {"value": "completed", "label": "완료"}
+] %}
+<section class="view page-view dashboard-view" data-view="dashboard">
+  <input type="hidden" id="dashboardMailFilter" name="dashboard_mail_filter" value="">
+  <input type="hidden" id="dashboardMailToday" value="{{ dashboard_reference_day or '' }}">
+  <div
+    id="stats"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/stats.html" %}
+  </div>
+
+  <div class="dashboard-summary-grid dashboard-surface-grid">
+    <aside class="panel dashboard-top-panel">
+      <div class="panel-body" id="dashboardDistribution">
+        {% include "partials/dashboard_distribution.html" %}
+      </div>
+    </aside>
+
+    <aside class="panel dashboard-top-panel">
+      <div class="panel-body" id="dashboardCategoryTimeline">
+        {% include "partials/dashboard_category_timeline.html" %}
+      </div>
+    </aside>
+
+    <section class="panel routing-overview-panel dashboard-top-panel">
+      <div class="panel-body" id="dashboardRoutingOverview">
+        {% if dashboard_work_scope %}
+          {% include "partials/dashboard_my_work_aging.html" %}
+        {% else %}
+          {% include "partials/dashboard_routing_overview.html" %}
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+  <div class="dashboard-grid dashboard-mail-grid">
+    <section class="panel dashboard-mail-panel">
+      <div class="panel-head">
+        <div class="dashboard-mail-headcopy panel-title-row">
+          <h2>Mail Streams</h2>
+          {{ info_tooltip("최근 메일과 라우팅 상태를 한 번에 보고, 필요한 경우 바로 수동 전달합니다.", "메일 스트림 설명") }}
+        </div>
+        <div class="dashboard-mail-controls">
+          <details class="dashboard-category-select-field" data-category-filter-select>
+            <summary class="dashboard-category-select" aria-label="업무 유형 필터">
+              <span data-category-filter-selected-label>업무 유형 전체</span>
+            </summary>
+            <div class="dashboard-category-select-menu" role="listbox" aria-label="업무 유형 필터 옵션">
+              <button type="button" class="dashboard-category-select-option" data-category-filter="__all__" role="option">업무 유형 전체</button>
+              {% for category in category_order %}
+                <button type="button" class="dashboard-category-select-option" data-category-filter="{{ category }}" role="option">{{ category }}</button>
+              {% endfor %}
+            </div>
+          </details>
+          <div class="mail-status-filter-row dashboard-mail-status-row">
+            <label class="sr-only" for="dashboardWorkStatusFilter">진행 상태 필터</label>
+            <input type="hidden" id="dashboardWorkStatusFilter" name="status" value="{{ selected_work_status or '' }}">
+            <div class="mail-status-filter dashboard-work-status-filter" aria-label="진행 상태 필터">
+              <span class="mail-status-filter-highlight" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="mail-status-filter-btn{% if not selected_work_status %} is-active{% endif %}"
+                data-mail-status-filter=""
+                data-mail-status-target="dashboard"
+                aria-pressed="{{ 'true' if not selected_work_status else 'false' }}"
+              >전체</button>
+              {% for option in status_options %}
+                <button
+                  type="button"
+                  class="mail-status-filter-btn{% if selected_work_status == option['value'] %} is-active{% endif %}"
+                  data-mail-status-filter="{{ option['value'] }}"
+                  data-mail-status-target="dashboard"
+                  aria-pressed="{{ 'true' if selected_work_status == option['value'] else 'false' }}"
+                >{{ option.label }}</button>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap dashboard-mail-table-wrap">
+        <table class="dashboard-mail-table">
+          <colgroup>
+            <col class="mail-read-state-col">
+            <col class="dashboard-status-col">
+            <col class="dashboard-sender-col">
+            <col class="subject-col">
+            <col class="dashboard-classification-col">
+            <col class="dashboard-receiver-col">
+            <col class="dashboard-time-col">
+            <col class="manual-route-col">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="mail-read-state-col" aria-label="읽음 상태"></th>
+              <th class="dashboard-status-col">상태</th>
+              <th class="dashboard-sender-col">발신자</th>
+              <th class="subject-col">제목</th>
+              <th class="dashboard-classification-col">업무 유형</th>
+              <th class="dashboard-receiver-col">담당자</th>
+              <th class="dashboard-time-col">수신일시</th>
+              <th class="manual-route-col">수동 라우팅</th>
+            </tr>
+          </thead>
+          <tbody
+            id="dashboardMailRows"
+          >
+            {% set mail_rows_mode = "dashboard" %}
+            {% include "partials/mail_rows.html" %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</section>

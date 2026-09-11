@@ -1,0 +1,98 @@
+{% set panel = mail_decision or {} %}
+{% set run = panel.run or {} %}
+{% set decision = panel.decision or {} %}
+{% set steps = panel.steps or [] %}
+{% set error = panel.error or "" %}
+{% set status_class = panel.status_class or "status-slate" %}
+{% set email_ref = panel.email_ref or run.email_message_id or "" %}
+
+<div
+  id="mail-decision-panel"
+  class="mail-decision-panel"
+  {% if run.run_id %}
+    hx-get="/ui/mail-decision-runs/{{ run.run_id | urlencode }}"
+    hx-trigger="mail-decision-refresh from:body"
+    hx-target="#mail-decision-panel"
+    hx-swap="outerHTML"
+  {% endif %}
+>
+  {% if error %}
+    <div class="notice danger">
+      <strong>{{ panel.error_title or "Mail Decision 실행 실패" }}</strong>
+      <span>{{ error }}</span>
+    </div>
+  {% elif run.run_id %}
+    <div class="mail-decision-summary">
+      <table class="info-table">
+        <tbody>
+          <tr>
+            <td>전달 상태</td>
+            <td>
+              <span class="status-badge status-badge--compact {{ status_class }}">{{ panel.status_label }}</span>
+              {% if panel.review_help %}
+                <span class="mail-decision-review-help">{{ panel.review_help }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr><td>업무 유형</td><td>{{ decision.category_label }}</td></tr>
+          {% if decision.customer_name %}<tr><td>거래처</td><td>{{ decision.customer_name }}</td></tr>{% endif %}
+          {% if not panel.hide_review_reason %}
+            <tr><td>검토 상태</td><td>{{ panel.review_reason_label }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+      {% if panel.assignment_candidates %}
+        <div class="routing-evidence-section">
+          <span class="routing-evidence-title">담당 후보</span>
+          <div class="routing-ranking-list">
+            {% for candidate in panel.assignment_candidates[:3] %}
+              <div class="routing-ranking-item">
+                <div class="routing-ranking-top">
+                  <span class="routing-ranking-identity">
+                    <strong>{{ candidate.name or candidate.assignee_name }}</strong>
+                    <span class="routing-ranking-email">
+                      {% if candidate.areas %}{{ candidate.areas | join(", ") }}{% else %}-{% endif %}
+                      {% if candidate.department %} · {{ candidate.department }}{% endif %}
+                      {% if candidate.position %} · {{ candidate.position }}{% endif %}
+                    </span>
+                  </span>
+                  <span class="routing-candidate-actions">
+                    {% if candidate.email or candidate.email_address %}
+                      <span class="routing-ranking-email">{{ candidate.email or candidate.email_address }}</span>
+                    {% endif %}
+                    {% if candidate.score_label and not panel.hide_candidate_scores %}
+                      <span class="status-badge status-badge--compact status-slate">{{ candidate.score_label }}</span>
+                    {% endif %}
+                    {% if panel.can_manual_assign and candidate.assignee_id %}
+                      <form
+                        hx-post="/ui/emails/{{ email_ref | urlencode }}/routing/manual-assign"
+                        hx-target="#mail-decision-panel"
+                        hx-swap="outerHTML"
+                        hx-disabled-elt="find button"
+                        hx-on:click="event.stopPropagation()"
+                      >
+                        <input type="hidden" name="assignee_user_id" value="{{ candidate.assignee_id }}">
+                        <button class="btn route-now-btn route-now-btn--ready" type="submit">
+                          <span class="material-symbols-outlined">assignment_ind</span>
+                          배정
+                        </button>
+                      </form>
+                    {% endif %}
+                  </span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      {% if panel.status == "review_required" and not panel.assignment_candidates and panel.manual_assign_disabled_reason %}
+        <p class="subtle">{{ panel.manual_assign_disabled_reason }}</p>
+      {% endif %}
+    </div>
+    {% if panel.steps_error or run.status == "failed" %}
+      {% include "partials/mail_decision_steps.html" %}
+    {% endif %}
+  {% else %}
+    <p class="subtle">{{ panel.empty_message or "아직 실행된 업무 판단이 없습니다." }}</p>
+  {% endif %}
+</div>

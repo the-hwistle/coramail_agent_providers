@@ -1,0 +1,190 @@
+{% set total = summary.email_count or 0 %}
+{% set classified = summary.classified_count or 0 %}
+{% set classified_pct = (classified / total * 100) | round | int if total else 0 %}
+{% set routed = summary.routed_count or 0 %}
+{% set routed_pct = (routed / total * 100) | round | int if total else 0 %}
+{% set forwarded = summary.forwarded_count or 0 %}
+{% set forwarded_pct = (forwarded / total * 100) | round | int if total else 0 %}
+<div class="stats-priority-row{% if dashboard_work_scope %} stats-priority-row-assignee{% endif %}">
+  <div class="stats{% if dashboard_work_scope %} stats-assignee{% endif %}">
+    {% if dashboard_work_scope %}
+      <button
+        type="button"
+        class="stat stat-action"
+        hx-post="/ui/my-work"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 배정된 업무 현황 확인"
+      >
+        <span class="label">Assigned Work</span>
+        <div class="stat-line">
+          <strong>{{ total }} 건</strong>
+          <span class="material-symbols-outlined">assignment_ind</span>
+        </div>
+        <p>배정된 업무</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-action"
+        hx-post="/ui/my-work?status=assigned"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 미확인 업무 확인"
+      >
+        <span class="label">Unacknowledged</span>
+        <div class="stat-line">
+          <strong>{{ summary.assigned_work_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">mark_email_unread</span>
+        </div>
+        <p>미확인</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-action"
+        hx-post="/ui/my-work?status=acknowledged"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 확인한 업무 확인"
+      >
+        <span class="label">Acknowledged</span>
+        <div class="stat-line">
+          <strong>{{ summary.acknowledged_work_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">drafts</span>
+        </div>
+        <p>확인함</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-action"
+        hx-post="/ui/my-work?status=in_progress"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 진행중 업무 확인"
+      >
+        <span class="label">In Progress</span>
+        <div class="stat-line">
+          <strong>{{ summary.in_progress_work_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">pending_actions</span>
+        </div>
+        <p>진행중</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-action"
+        hx-post="/ui/my-work?status=responded"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 회신된 업무 확인"
+      >
+        <span class="label">Responded</span>
+        <div class="stat-line">
+          <strong>{{ summary.responded_work_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">outgoing_mail</span>
+        </div>
+        <p>회신 시작 또는 응답됨</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-action"
+        hx-post="/ui/my-work?status=completed"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 완료 업무 확인"
+      >
+        <span class="label">Completed</span>
+        <div class="stat-line">
+          <strong>{{ summary.completed_work_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">task_alt</span>
+        </div>
+        <p>오늘 완료 {{ summary.completed_today_work_count or 0 }}건</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-urgent stat-action"
+        hx-post="/ui/my-work?status=overdue"
+        hx-target="#main-panel"
+        hx-swap="innerHTML"
+        aria-label="담당 업무 화면에서 기한 초과 업무 확인"
+      >
+        <span class="label">Overdue</span>
+        <div class="stat-line">
+          <strong>{{ summary.overdue_work_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">event_busy</span>
+        </div>
+        <p>기한 초과 업무</p>
+      </button>
+    {% else %}
+      <article class="stat">
+        <span class="label">Total Mails</span>
+        <div class="stat-line">
+          <strong>{{ total }} 건</strong>
+          <span class="material-symbols-outlined">mail</span>
+        </div>
+        <p>전체 수신 메일 수</p>
+      </article>
+
+      <button
+        type="button"
+        class="stat stat-action"
+        data-dashboard-mail-filter-action="today"
+        aria-pressed="false"
+        aria-label="Mail Streams에 오늘 수신 메일만 표시"
+      >
+        <span class="label">Today Mails</span>
+        <div class="stat-line">
+          <strong>{{ summary.today_email_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">today</span>
+        </div>
+        <p>오늘 수신 메일 수</p>
+      </button>
+
+      <button
+        type="button"
+        class="stat stat-urgent stat-action"
+        data-dashboard-mail-filter-action="urgent"
+        aria-pressed="false"
+        aria-label="Mail Streams에 긴급 메일만 표시"
+      >
+        <span class="label">Urgent Mails</span>
+        <div class="stat-line">
+          <strong>{{ summary.urgent_count or 0 }} 건</strong>
+          <span class="material-symbols-outlined">priority_high</span>
+        </div>
+        <p>오늘 긴급 {{ summary.today_urgent_count or 0 }}건</p>
+      </button>
+
+      <article class="stat">
+        <span class="label">Classified</span>
+        <div class="stat-line">
+          <strong>{{ classified_pct }}%</strong>
+          <span class="material-symbols-outlined">auto_awesome</span>
+        </div>
+        <p>분류 요망 {{ summary.unclassified_count or 0 }}건</p>
+      </article>
+
+      <article class="stat">
+        <span class="label">Routed</span>
+        <div class="stat-line">
+          <strong>{{ routed_pct }}%</strong>
+          <span class="material-symbols-outlined">alt_route</span>
+        </div>
+        <p>배정 요망 {{ summary.unrouted_count or 0 }}건</p>
+      </article>
+
+      <article class="stat">
+        <span class="label">Forwarded</span>
+        <div class="stat-line">
+          <strong>{{ forwarded_pct }}%</strong>
+          <span class="material-symbols-outlined">forward_to_inbox</span>
+        </div>
+        <p>전달 요망 {{ summary.unforwarded_count or 0 }}건</p>
+      </article>
+    {% endif %}
+  </div>
+</div>

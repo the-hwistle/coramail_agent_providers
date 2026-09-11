@@ -1,0 +1,157 @@
+{% from "macros.html" import category_chip with context %}
+{% set summary = ops_summary or {} %}
+<section class="view page-view ops-view" data-view="monitoring">
+  <div class="ops-header">
+    <form
+      class="ops-filters"
+      hx-get="/ui/monitoring"
+      hx-trigger="keyup changed delay:400ms from:#opsSearch, change from:#opsCategory"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+    >
+      <label class="sr-only" for="opsSearch">운영 상태 검색</label>
+      <input
+        class="input"
+        id="opsSearch"
+        name="q"
+        placeholder="Search mail, sender, refs"
+        value="{{ ops_query or '' }}"
+      >
+      <label class="sr-only" for="opsCategory">카테고리</label>
+      <select class="input" id="opsCategory" name="category">
+        <option value="">전체</option>
+        {% for category in category_order %}
+          <option value="{{ category }}"{% if selected_category == category %} selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <button
+      class="icon-btn ops-refresh-btn"
+      type="button"
+      hx-get="/ui/monitoring-rows?q={{ ops_query|urlencode }}&category={{ selected_category|urlencode }}"
+      hx-target="#opsRows"
+      hx-swap="innerHTML"
+      title="새로고침"
+      aria-label="Monitoring 상태 새로고침"
+    >
+      <span class="material-symbols-outlined">refresh</span>
+    </button>
+    <details class="ops-column-menu">
+      <summary class="icon-btn" title="컬럼 선택" aria-label="Monitoring 컬럼 선택">
+        <span class="material-symbols-outlined">view_column</span>
+      </summary>
+      <div class="ops-column-popover">
+        {% set monitoring_columns = [
+          ("health", "상태"),
+          ("subject", "제목"),
+          ("sender", "발신자"),
+          ("business", "업무 유형"),
+          ("assignee", "담당자"),
+          ("received", "수신일시"),
+          ("attachment", "첨부파일"),
+          ("summary", "요약"),
+          ("classification", "업무유형 분류"),
+          ("decision", "담당자 배정"),
+          ("routing", "라우팅"),
+          ("forwarding", "전달"),
+        ] %}
+        {% for key, label in monitoring_columns %}
+          <label>
+            <input type="checkbox" data-monitoring-column-toggle="{{ key }}" checked>
+            <span>{{ label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </details>
+  </div>
+
+  <div class="ops-workspace">
+    <section class="panel ops-panel">
+      <div class="table-wrap ops-table-wrap">
+        <table class="ops-table">
+          <colgroup>
+            <col class="ops-health-col" data-monitoring-column="health">
+            <col class="ops-subject-col" data-monitoring-column="subject">
+            <col class="ops-sender-col" data-monitoring-column="sender">
+            <col class="ops-business-col" data-monitoring-column="business">
+            <col class="ops-assignee-col" data-monitoring-column="assignee">
+            <col class="ops-received-col" data-monitoring-column="received">
+            <col class="ops-stage-col" data-monitoring-column="attachment">
+            <col class="ops-stage-col" data-monitoring-column="summary">
+            <col class="ops-stage-col" data-monitoring-column="classification">
+            <col class="ops-stage-col ops-decision-col" data-monitoring-column="decision">
+            <col class="ops-stage-col" data-monitoring-column="routing">
+            <col class="ops-stage-col" data-monitoring-column="forwarding">
+          </colgroup>
+          <thead>
+            <tr>
+              <th data-monitoring-column="health"><span class="ops-column-label">상태</span><span class="ops-column-resizer" data-monitoring-column-resizer="health" role="separator" aria-orientation="vertical" aria-label="상태 컬럼 너비 조정"></span></th>
+              <th data-monitoring-column="subject"><span class="ops-column-label">제목</span><span class="ops-column-resizer" data-monitoring-column-resizer="subject" role="separator" aria-orientation="vertical" aria-label="제목 컬럼 너비 조정"></span></th>
+              <th data-monitoring-column="sender"><span class="ops-column-label">발신자</span><span class="ops-column-resizer" data-monitoring-column-resizer="sender" role="separator" aria-orientation="vertical" aria-label="발신자 컬럼 너비 조정"></span></th>
+              <th data-monitoring-column="business"><span class="ops-column-label">업무 유형</span><span class="ops-column-resizer" data-monitoring-column-resizer="business" role="separator" aria-orientation="vertical" aria-label="업무 유형 컬럼 너비 조정"></span></th>
+              <th data-monitoring-column="assignee"><span class="ops-column-label">담당자</span><span class="ops-column-resizer" data-monitoring-column-resizer="assignee" role="separator" aria-orientation="vertical" aria-label="담당자 컬럼 너비 조정"></span></th>
+              <th data-monitoring-column="received"><span class="ops-column-label">수신일시</span><span class="ops-column-resizer" data-monitoring-column-resizer="received" role="separator" aria-orientation="vertical" aria-label="수신일시 컬럼 너비 조정"></span></th>
+              <th data-monitoring-column="attachment">
+                <div class="ops-column-head">
+                  <span>첨부파일</span>
+                  <button class="icon-btn ops-stage-action" type="button" title="표시된 메일 첨부파일 모두 재분석" aria-label="표시된 메일 첨부파일 모두 재분석" data-monitoring-bulk-action="attachment">
+                    <span class="material-symbols-outlined">docs</span>
+                  </button>
+                </div>
+                <span class="ops-column-resizer" data-monitoring-column-resizer="attachment" role="separator" aria-orientation="vertical" aria-label="첨부파일 컬럼 너비 조정"></span>
+              </th>
+              <th data-monitoring-column="summary">
+                <div class="ops-column-head">
+                  <span>요약</span>
+                  <button class="icon-btn ops-stage-action" type="button" title="표시된 메일 요약문 모두 재생성" aria-label="표시된 메일 요약문 모두 재생성" data-monitoring-bulk-action="summary">
+                    <span class="material-symbols-outlined">subject</span>
+                  </button>
+                </div>
+                <span class="ops-column-resizer" data-monitoring-column-resizer="summary" role="separator" aria-orientation="vertical" aria-label="요약 컬럼 너비 조정"></span>
+              </th>
+              <th data-monitoring-column="classification">
+                <div class="ops-column-head">
+                  <span>업무유형 분류</span>
+                  <button class="icon-btn ops-stage-action" type="button" title="표시된 메일 유형 모두 재분류" aria-label="표시된 메일 유형 모두 재분류" data-monitoring-bulk-action="classification">
+                    <span class="material-symbols-outlined">label</span>
+                  </button>
+                </div>
+                <span class="ops-column-resizer" data-monitoring-column-resizer="classification" role="separator" aria-orientation="vertical" aria-label="업무유형 분류 컬럼 너비 조정"></span>
+              </th>
+              <th data-monitoring-column="decision">
+                <div class="ops-column-head">
+                  <span>담당자 배정</span>
+                  <button class="icon-btn ops-stage-action" type="button" title="표시된 메일 Mail Decision 모두 실행" aria-label="표시된 메일 Mail Decision 모두 실행" data-monitoring-bulk-action="decision">
+                    <span class="material-symbols-outlined">subject</span>
+                  </button>
+                </div>
+                <span class="ops-column-resizer" data-monitoring-column-resizer="decision" role="separator" aria-orientation="vertical" aria-label="담당자 배정 컬럼 너비 조정"></span>
+              </th>
+              <th data-monitoring-column="routing">
+                <div class="ops-column-head">
+                  <span>라우팅</span>
+                  <button class="icon-btn ops-stage-action" type="button" title="표시된 검토 필요 메일을 1순위 후보로 모두 확정" aria-label="표시된 검토 필요 메일을 1순위 후보로 모두 확정" data-monitoring-bulk-action="review-confirm" data-monitoring-bulk-confirm="표시된 검토 필요 메일을 1순위 후보 담당자로 모두 확정하시겠습니까?">
+                    <span class="material-symbols-outlined">how_to_reg</span>
+                  </button>
+                </div>
+                <span class="ops-column-resizer" data-monitoring-column-resizer="routing" role="separator" aria-orientation="vertical" aria-label="라우팅 컬럼 너비 조정"></span>
+              </th>
+              <th data-monitoring-column="forwarding">
+                <div class="ops-column-head">
+                  <span>전달</span>
+                  <button class="icon-btn ops-stage-action" type="button" title="표시된 메일 담당자 모두 수동 전달" aria-label="표시된 메일 담당자 모두 수동 전달" data-monitoring-bulk-action="forwarding" data-monitoring-bulk-confirm="표시된 전달 가능 메일을 현재 담당자에게 모두 수동 라우팅하시겠습니까?">
+                    <span class="material-symbols-outlined">forward_to_inbox</span>
+                  </button>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="opsRows">
+            {% include "partials/ops_rows.html" %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <aside class="ops-inspector" id="opsInspector" aria-live="polite" hidden></aside>
+  </div>
+</section>

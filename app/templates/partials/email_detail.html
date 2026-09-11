@@ -1,0 +1,604 @@
+{% from "macros.html" import category_chip, empty_state, info_tooltip, sender_contact_link with context %}
+{% if not email %}
+  {{ empty_state("표시할 이메일이 없습니다.") }}
+{% else %}
+  {% set classification = email.classification or {} %}
+  {% set label = email.business_label or email.mail_category or mail_category(classification) %}
+  {% set state = email.classification_state or "unclassified" %}
+  {% set refs = classification.business_refs or [] %}
+  {% set vessels = classification.vessel_names or [] %}
+  {% set scores = classification.label_scores or {} %}
+  {% set attachments = email.attachments or [] %}
+  {% set related = related_emails or [] %}
+  {% set customer_history_items = customer_history or [] %}
+  {% set customer_name = classification.customer_name or "" %}
+  {% set routing_queue = email.routing_target_label or classification.routing_target_label or route_label(classification.routing_labels or []) %}
+  {% set assignee_name = email.assignee_name or classification.assignee_name or "" %}
+  {% set assignee_department = email.assignee_department or classification.assignee_department or "" %}
+  {% set assignee_position = email.assignee_position or classification.assignee_position or "" %}
+  {% set assignee_email = email.assignee_email or classification.assignee_email or "" %}
+  {% set assignee_display = assignee_name or routing_queue or "-" %}
+  {% set delivery_status = email.manual_route_status_label or ("미전달" if assignee_email else "미할당") %}
+  {% set delivery_status_tone = "status-success" if delivery_status == "전달 완료" else "status-warning" if delivery_status in ["전달 중", "미전달", "재전달"] else "status-danger" if delivery_status == "전달 실패" else "status-slate" %}
+  {% set can_update_work = current_user_id and email.assignee_user_id and current_user_id == email.assignee_user_id %}
+  {% set work_status = email.work_status or email.work_item_status or "" %}
+  {% set can_toggle_in_progress = can_update_work and work_status in ["assigned", "acknowledged", "in_progress"] %}
+  {% set key_request = polish_summary(classification.inquiry_summary or classification.technical_issue or classification.summary or email.summary or "-") %}
+  {% set classification_runtime = classification_regeneration or {} %}
+  {% set classify_button_state = classify_regenerate_state or (classification_runtime.state if classification_runtime else "ready") or "ready" %}
+  {% set classify_button_label = "분류중" if classify_button_state == "pending" else "완료" if classify_button_state == "completed" else "실패" if classify_button_state == "failed" else "재분류" %}
+  {% set classify_button_variant = "pending" if classify_button_state == "pending" else "sent" if classify_button_state == "completed" else "failed" if classify_button_state == "failed" else "ready" %}
+  {% set classify_progress_state = classify_button_state if classify_button_state in ["pending", "failed"] else "" %}
+  {% set classify_progress_active = classify_progress_state in ["pending", "failed"] %}
+  {% set classify_progress_label = classification_runtime.label if classification_runtime and classification_runtime.label else "메일 유형 재분류 중" if classify_button_state == "pending" else "메일 유형 재분류" %}
+  {% set classify_progress_caption = classification_runtime.caption if classification_runtime and classification_runtime.caption else "현재 규칙과 모델 기준으로 메일 유형 분류를 다시 수행하고 있습니다. 완료되면 결과가 자동 반영됩니다." %}
+  {% set classify_progress_initial = classification_runtime.percent if classification_runtime and classification_runtime.percent is not none else 6 %}
+  {% set summary_runtime = summary_regeneration or {} %}
+  {% set attachment_runtime = attachment_reanalysis or {} %}
+  {% set summary_button_state = summary_regenerate_state or (summary_runtime.state if summary_runtime else "ready") or "ready" %}
+  {% set summary_button_label = "생성중" if summary_button_state == "pending" else "완료" if summary_button_state == "completed" else "실패" if summary_button_state == "failed" else "재생성" %}
+  {% set summary_button_variant = "pending" if summary_button_state == "pending" else "sent" if summary_button_state == "completed" else "failed" if summary_button_state == "failed" else "ready" %}
+  {% set summary_progress_state = summary_button_state if summary_button_state in ["pending", "failed"] else "" %}
+  {% set summary_progress_active = summary_progress_state == "pending" %}
+  {% set summary_progress_label = summary_runtime.label if summary_runtime and summary_runtime.label else "핵심 요청 재생성 중" if summary_button_state == "pending" else "핵심 요청 생성 중" %}
+  {% set summary_progress_caption = summary_runtime.caption if summary_runtime and summary_runtime.caption else "현재 프롬프트 버전으로 핵심 요청을 다시 만들고 있습니다. 완료되면 결과가 자동 반영됩니다." if summary_button_state == "pending" else "AI가 핵심 요청과 업무 문맥을 생성하고 있습니다. 완료되면 이 영역이 자동으로 갱신됩니다." %}
+  {% set summary_progress_initial = summary_runtime.percent if summary_runtime and summary_runtime.percent is not none else 6 if summary_button_state == "pending" else 0 %}
+  {% set attachment_button_state = attachment_runtime.state if attachment_runtime else "ready" %}
+  {% set attachment_button_label = "생성중" if attachment_button_state == "pending" else "완료" if attachment_button_state == "completed" else "실패" if attachment_button_state == "failed" else "재생성" %}
+  {% set attachment_button_variant = "pending" if attachment_button_state == "pending" else "sent" if attachment_button_state == "completed" else "failed" if attachment_button_state == "failed" else "ready" %}
+  {% set attachment_progress_state = attachment_button_state if attachment_button_state in ["pending", "failed"] else "" %}
+  {% set attachment_progress_active = attachment_progress_state == "pending" %}
+  {% set attachment_progress_label = attachment_runtime.label if attachment_runtime and attachment_runtime.label else "첨부파일 재분석 중" %}
+  {% set attachment_progress_caption = attachment_runtime.caption if attachment_runtime and attachment_runtime.caption else "첨부파일 문서 유형과 핵심 필드를 다시 추출하고 있습니다. 완료되면 결과가 자동 반영됩니다." %}
+  {% set attachment_progress_initial = attachment_runtime.percent if attachment_runtime and attachment_runtime.percent is not none else 6 if attachment_button_state == "pending" else 0 %}
+  {% set routing_resolution = classification.routing_resolution or "" %}
+  {% set routing_reasoning = classification.reasoning_summary or classification.requested_action or "-" %}
+  {% set routing_score_breakdown = classification.routing_score_breakdown or [] %}
+  {% set routing_candidate_rankings = classification.routing_candidate_rankings or [] %}
+  {% set routing_rag_context = classification.routing_rag_context or {} %}
+  {% set routing_similar_cases = routing_rag_context.similar_cases or [] %}
+  {% set routing_top_score = classification.routing_top_score or 0 %}
+  {% set routing_runner_up_score = classification.routing_runner_up_score or 0 %}
+  {% set routing_review_required = classification.routing_review_required %}
+  <article
+    class="detail-card"
+    data-email-index="{{ email.index }}"
+    data-email-uid="{{ email.email_uid }}"
+  >
+    <div class="detail-head">
+      <div class="detail-head-copy">
+        <span class="label">Selected Mail</span>
+        <h2>{{ email.subject or "(no subject)" }}</h2>
+        <div class="detail-head-meta" role="group" aria-label="메일 메타 정보">
+          <span class="detail-head-sender">
+            {{ sender_contact_link(email) }}
+            <span class="detail-head-sender-address">&lt;{{ display_sender_address(email) }}&gt;</span>
+          </span>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <div class="detail-action-row">
+          {% if email.cc %}
+            <details class="detail-head-cc" data-cc-popover>
+              <summary
+                class="detail-head-cc-trigger"
+                aria-controls="cc-popover-{{ email.index }}"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
+                <span>Cc</span>
+                <span class="material-symbols-outlined detail-head-cc-caret" aria-hidden="true">expand_more</span>
+              </summary>
+              <div class="detail-head-cc-popover" id="cc-popover-{{ email.index }}">
+                <span class="detail-head-cc-popover-label">Cc recipients</span>
+                <span class="detail-head-cc-value">{{ email.cc }}</span>
+              </div>
+            </details>
+          {% endif %}
+          {% if can_update_work %}
+            <form
+              method="post"
+              action="/ui/emails/{{ email.email_uid | urlencode }}/work/in-progress"
+              class="work-progress-toggle-form"
+              hx-post="/ui/emails/{{ email.email_uid | urlencode }}/work/in-progress"
+              hx-swap="none"
+              onclick="event.stopPropagation()"
+            >
+              <input type="hidden" name="active" value="{{ 'false' if work_status == 'in_progress' else 'true' }}">
+              <button
+                type="submit"
+                class="btn work-progress-toggle{% if work_status == 'in_progress' %} is-active{% endif %}"
+                {% if not can_toggle_in_progress %}disabled aria-disabled="true"{% endif %}
+                aria-label="{{ '진행 표시 해제' if work_status == 'in_progress' else '진행 표시 설정' }}"
+                title="{{ '진행 표시 해제' if work_status == 'in_progress' else '진행 표시 설정' }}"
+                data-work-in-progress-toggle
+              >
+                <span class="material-symbols-outlined">{{ 'toggle_on' if work_status == 'in_progress' else 'toggle_off' }}</span>
+                진행 표시
+              </button>
+            </form>
+            <form
+              method="post"
+              action="/ui/emails/{{ email.email_uid | urlencode }}/work/reply-initiate"
+              target="_blank"
+              rel="noopener"
+              class="mail-overview-action-form"
+              onclick="event.stopPropagation()"
+            >
+              <button type="submit" class="btn">
+                <span class="material-symbols-outlined">reply</span>
+                답장
+              </button>
+            </form>
+            <button
+              type="button"
+              class="btn"
+              hx-post="/ui/emails/{{ email.email_uid | urlencode }}/work/complete"
+              hx-swap="none"
+              hx-confirm="이 업무를 완료 처리하시겠습니까?"
+              data-work-complete-button
+              hx-on:click="event.stopPropagation()"
+            >
+              <span class="material-symbols-outlined">task_alt</span>
+              업무 완료
+            </button>
+          {% endif %}
+          <button
+            type="button"
+            class="btn danger detail-delete-btn"
+            aria-label="선택한 메일 삭제"
+            hx-post="/ui/emails/{{ email.email_uid | urlencode }}/trash"
+            hx-target="#main-panel"
+            hx-swap="innerHTML"
+            hx-confirm="이 메일을 Gmail 휴지통으로 이동하시겠습니까?"
+            hx-on:click="event.stopPropagation()"
+            data-mail-delete-button
+          >
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+        </div>
+        <span class="detail-head-time">{{ format_mail_detail_time(email.date or email.received_at or email.created_at) }}</span>
+      </div>
+    </div>
+
+    <div class="detail-layout">
+      <section class="panel message-panel">
+        <div class="panel-body message-panel-body{% if attachments %} message-panel-body--with-attachments{% endif %}">
+          {% if attachments %}
+            <div
+              class="summary-progress{% if attachment_progress_active %} is-active{% endif %}{% if attachment_button_state == 'failed' %} is-failed{% endif %}"
+              data-attachment-progress
+              data-attachment-progress-state="{{ attachment_progress_state }}"
+              data-attachment-progress-label="{{ attachment_progress_label }}"
+              data-attachment-progress-caption="{{ attachment_progress_caption }}"
+              data-attachment-progress-initial="{{ attachment_progress_initial if attachment_progress_state else 0 }}"
+            >
+              <div class="summary-progress-meta">
+                <strong data-attachment-progress-label-node>{{ attachment_progress_label }}</strong>
+                <span class="mono" data-attachment-progress-value>{% if attachment_button_state == "failed" %}실패{% elif attachment_progress_state %}{{ attachment_progress_initial }}%{% else %}0%{% endif %}</span>
+              </div>
+              <div
+                class="summary-progress-track"
+                data-attachment-progress-track
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="{{ attachment_progress_initial if attachment_progress_state else 0 }}"
+                aria-label="첨부파일 재분석 진행률"
+              >
+                <span
+                  class="summary-progress-fill"
+                  data-attachment-progress-fill
+                  style="width: {{ attachment_progress_initial if attachment_progress_state else 0 }}%;"
+                ></span>
+              </div>
+            </div>
+          {% endif %}
+          {% if attachments %}
+            <section class="detail-subsection">
+              <div class="attachment-list">
+                {% for file in attachments %}
+                  {% if file.analysis_rows %}
+                    <details class="attachment" data-attachment-key="{{ file.attachment_uid or file.filename or file.index }}">
+                      <summary class="attachment-summary">
+                        <span class="material-symbols-outlined">
+                          {% if file.preview_kind == "image" %}image{% elif file.preview_kind == "pdf" %}picture_as_pdf{% else %}description{% endif %}
+                        </span>
+                        <span class="attachment-link">
+                          <span class="attachment-title-row">
+                            <strong>{{ file.filename or "attachment" }}</strong>
+                            {% if file.document_category_label or file.document_category %}
+                              <small class="attachment-kind">{{ file.document_category_label or file.document_category }}</small>
+                            {% endif %}
+                            <span class="material-symbols-outlined attachment-toggle" aria-hidden="true">expand_more</span>
+                          </span>
+                        </span>
+                        <span class="attachment-actions" onclick="event.stopPropagation()">
+                          {% if file.size_label %}
+                            <span class="attachment-size">{{ file.size_label }}</span>
+                          {% endif %}
+                          {% if file.exists %}
+                            <a class="chip blue" href="{{ file.view_url }}" target="_blank" rel="noopener">View</a>
+                            <a class="chip" href="{{ file.download_url }}">Download</a>
+                          {% else %}
+                            <span class="chip red">Missing</span>
+                          {% endif %}
+                        </span>
+                      </summary>
+                      <div class="attachment-analysis-body">
+                        <div class="attachment-analysis-title">Details</div>
+                        <table class="info-table attachment-field-table">
+                          <tbody>
+                            {% for row in file.analysis_rows %}
+                              {% if row.kind == "line_item" %}
+                                <tr class="attachment-line-item-row">
+                                  <td colspan="2">
+                                    <div class="attachment-line-item">
+                                      <div class="attachment-line-item-label">{{ row.label }}</div>
+                                      {% set attachment_doc_type = file.document_type or file.document_category or "" %}
+                                      <div class="attachment-line-item-grid{% if attachment_doc_type == 'rfq' %} attachment-line-item-grid--rfq{% endif %}" role="table" aria-label="{{ row.label }} 품목 상세">
+                                        <div class="attachment-line-item-head" role="row">
+                                          {% for column in row.columns %}
+                                            <span role="columnheader">{{ column.label }}</span>
+                                          {% endfor %}
+                                        </div>
+                                        <div class="attachment-line-item-values" role="row">
+                                          {% for column in row.columns %}
+                                            <span role="cell">{{ column.value }}</span>
+                                          {% endfor %}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              {% else %}
+                                <tr>
+                                  <td>{{ row.label | attachment_field_label(file.document_type or file.document_category or file.document_category_label) }}</td>
+                                  <td>{{ row.value }}</td>
+                                </tr>
+                              {% endif %}
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  {% else %}
+                    <div class="attachment attachment--static">
+                      <div class="attachment-summary">
+                        <span class="material-symbols-outlined">
+                          {% if file.preview_kind == "image" %}image{% elif file.preview_kind == "pdf" %}picture_as_pdf{% else %}description{% endif %}
+                        </span>
+                        <span class="attachment-link">
+                          <span class="attachment-title-row">
+                            <strong>{{ file.filename or "attachment" }}</strong>
+                            {% if file.document_category_label or file.document_category %}
+                              <small class="attachment-kind">{{ file.document_category_label or file.document_category }}</small>
+                            {% endif %}
+                          </span>
+                        </span>
+                        <span class="attachment-actions" onclick="event.stopPropagation()">
+                          {% if file.size_label %}
+                            <span class="attachment-size">{{ file.size_label }}</span>
+                          {% endif %}
+                          {% if file.exists %}
+                            <a class="chip blue" href="{{ file.view_url }}" target="_blank" rel="noopener">View</a>
+                            <a class="chip" href="{{ file.download_url }}">Download</a>
+                          {% else %}
+                            <span class="chip red">Missing</span>
+                          {% endif %}
+                        </span>
+                      </div>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </section>
+          {% endif %}
+          <section class="detail-subsection">
+            {% if email.body_html_srcdoc %}
+              <div class="email-body email-body--html">
+                <iframe
+                  class="email-body-frame"
+                  sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                  referrerpolicy="no-referrer"
+                  scrolling="no"
+                  srcdoc="{{ email.body_html_srcdoc }}"
+                  title="Email body"
+                ></iframe>
+              </div>
+            {% else %}
+              <div class="email-body email-body--plain">{{ email.body or email.body_preview or "본문 없음" }}</div>
+            {% endif %}
+          </section>
+        </div>
+      </section>
+
+      <section class="analysis-stack">
+        <div class="panel mail-overview-panel">
+          <div class="panel-head">
+            <div class="panel-title-row">
+              <h3>Mail Overview</h3>
+              {{ info_tooltip("카테고리, 담당, 핵심 요청처럼 모든 메일에서 먼저 확인할 업무 정보를 보여줍니다.", "공통 정보 설명") }}
+            </div>
+          </div>
+          <table class="info-table">
+            <tbody>
+              <tr>
+                <td>카테고리</td>
+                <td>{{ category_chip(label) }}</td>
+              </tr>
+              <tr>
+                <td>담당자</td>
+                <td>
+                  <div class="info-cell-stack">
+                    <div class="info-cell-split">
+                      <span>{{ assignee_display }}</span>
+                      <span class="status-badge status-badge--compact {{ delivery_status_tone }}">{{ delivery_status }}</span>
+                    </div>
+                    {% if assignee_name %}
+                      <div class="info-submeta">
+                        {% if assignee_department or assignee_position %}
+                          <span>{{ assignee_department }}{% if assignee_department and assignee_position %} · {% endif %}{{ assignee_position }}</span>
+                        {% endif %}
+                        {% if assignee_email %}
+                          <span>{{ assignee_email }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              <tr><td>핵심 요청</td><td>{{ key_request }}</td></tr>
+              {% if refs %}
+                <tr>
+                  <td>업무번호</td>
+                  <td>
+                    <div class="overview-token-list">
+                      {% for ref in refs[:4] %}
+                        <button
+                          type="button"
+                          class="score-pill overview-copy-token"
+                          data-copy-business-ref="{{ ref }}"
+                          aria-label="업무번호 {{ ref }} 복사"
+                          title="업무번호 복사"
+                        >{{ ref }}</button>
+                      {% endfor %}
+                    </div>
+                  </td>
+                </tr>
+              {% endif %}
+              {% if customer_name %}
+                <tr><td>거래처</td><td>{{ customer_name }}</td></tr>
+              {% endif %}
+              {% if vessels %}
+                <tr>
+                  <td>선박/프로젝트</td>
+                  <td>{{ vessels[:3] | join(", ") }}</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+
+          {% if state in ["queued", "running", "failed", "unclassified"] %}
+            <div class="panel-body panel-note">
+              {% if state in ["queued", "running"] %}
+                분류와 라우팅 정보는 백그라운드 LLM 작업 완료 후 자동으로 반영됩니다.
+              {% elif state == "failed" %}
+                최근 분류 작업이 실패했습니다. 다음 polling 주기에서 다시 분류될 수 있습니다.
+              {% else %}
+                아직 분류 결과가 없습니다.
+              {% endif %}
+            </div>
+          {% endif %}
+
+          <!-- {% if assignee_name or routing_score_breakdown or routing_candidate_rankings or routing_similar_cases %}
+            <div class="panel-body routing-evidence-block">
+              <div class="routing-evidence-head">
+                <div>
+                  <strong>Routing Evidence</strong>
+                  <p>{{ routing_reasoning }}</p>
+                </div>
+                <div class="routing-evidence-metrics">
+                  <span class="status-badge status-badge--compact status-indigo">top {{ routing_top_score }}</span>
+                  {% if routing_runner_up_score %}
+                    <span class="status-badge status-badge--compact status-slate">next {{ routing_runner_up_score }}</span>
+                  {% endif %}
+                  {% if routing_review_required %}
+                    <span class="status-badge status-badge--compact status-warning">review</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              {% if routing_score_breakdown %}
+                <div class="routing-evidence-section">
+                  <span class="routing-evidence-title">선택 근거</span>
+                  <div class="routing-signal-list">
+                    {% for signal in routing_score_breakdown %}
+                      <div class="routing-signal-chip">
+                        <strong>{{ signal.key }}</strong>
+                        <span>+{{ signal.score }}</span>
+                        {% if signal.evidence %}
+                          <small>{{ signal.evidence }}</small>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              {% if routing_candidate_rankings %}
+                <div class="routing-evidence-section">
+                  <span class="routing-evidence-title">후보 비교</span>
+                  <div class="routing-ranking-list">
+                    {% for candidate in routing_candidate_rankings[:3] %}
+                      <div class="routing-ranking-item">
+                        <div class="routing-ranking-top">
+                          <strong>{{ candidate.assignee_name or "-" }}</strong>
+                          <span class="status-badge status-badge--compact status-slate">{{ candidate.score or 0 }}</span>
+                        </div>
+                        <p>
+                          {{ candidate.department or "-" }}{% if candidate.position %} · {{ candidate.position }}{% endif %}
+                          {% if candidate.reasons %} · {{ (candidate.reasons or []) | join(", ") }}{% endif %}
+                        </p>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              {% if routing_similar_cases %}
+                <div class="routing-evidence-section">
+                  <span class="routing-evidence-title">유사 사례</span>
+                  <div class="routing-similar-list">
+                    {% for item in routing_similar_cases[:3] %}
+                      <div class="routing-similar-item">
+                        <div class="routing-ranking-top">
+                          <strong>{{ item.assignee_name or item.routing_display or item.email_uid or "-" }}</strong>
+                          {% if item.similarity is not none %}
+                            <span class="status-badge status-badge--compact status-indigo">{{ ((item.similarity or 0) * 100) | round | int }}%</span>
+                          {% endif %}
+                        </div>
+                        <p>{{ item.subject or item.mail_category or "-" }}</p>
+                        <div class="info-submeta">
+                          {% if item.assignee_department or item.assignee_position %}
+                            <span>{{ item.assignee_department or "-" }}{% if item.assignee_position %} · {{ item.assignee_position }}{% endif %}</span>
+                          {% endif %}
+                          {% if item.business_refs or item.vessel_names %}
+                            <span>{{ (item.business_refs or []) | join(", ") }}{% if item.business_refs and item.vessel_names %} · {% endif %}{{ (item.vessel_names or []) | join(", ") }}</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              {% if routing_resolution %}
+                <div class="routing-evidence-footer">
+                  <span class="mono">{{ routing_resolution }}</span>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %} -->
+        </div>
+
+        {% if customer_history_items %}
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title-row">
+              <h3>거래처별 히스토리</h3>
+              {{ info_tooltip("같은 customer_name으로 분류된 최근 메일을 보여줍니다. 비교는 공백 정리와 대소문자 정합만 적용합니다.", "거래처 히스토리 설명") }}
+            </div>
+            {% if customer_name %}
+              <div class="panel-head-actions">
+                <span class="status-badge status-slate">{{ customer_name }}</span>
+              </div>
+            {% endif %}
+          </div>
+          <div class="panel-body">
+            <div class="related-mail-list">
+              {% for item in customer_history_items %}
+                {% set item_classification = item.classification or {} %}
+                {% set item_label = item.mail_category or mail_category(item_classification) %}
+                <button
+                  type="button"
+                  class="related-mail-card"
+                  data-email-index="{{ item.index }}"
+                  data-email-uid="{{ item.email_uid }}"
+                  hx-post="/ui/emails/{{ item.email_uid | urlencode }}"
+                  hx-target="#email-detail"
+                  hx-swap="innerHTML"
+                  hx-on:click="if (document.getElementById('selectedEmailIndex')) document.getElementById('selectedEmailIndex').value='{{ item.index }}'; if (document.getElementById('selectedEmailUid')) document.getElementById('selectedEmailUid').value='{{ item.email_uid }}';"
+                >
+                  <div class="related-mail-head">
+                    <strong>{{ item.subject or "(no subject)" }}</strong>
+                    {{ category_chip(item_label) }}
+                  </div>
+                  <div class="related-mail-meta">
+                    <span>
+                      {{ sender_contact_link(item) }}
+                      <span class="mono">&lt;{{ display_sender_address(item) }}&gt;</span>
+                    </span>
+                    <span>{{ format_mail_datetime(item.date or item.received_at or item.created_at) }}</span>
+                  </div>
+                  <div class="related-mail-meta">
+                    <span>{{ item.assignee_name or item.routing_display or "미할당" }}</span>
+                    <span>{{ item.manual_route_status_label or "상태 없음" }}</span>
+                  </div>
+                </button>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="panel mail-decision-inspector">
+          <div class="panel-head">
+            <div class="panel-title-row">
+              <h3>Mail Decision</h3>
+              {{ info_tooltip("본문과 첨부 분석을 함께 사용해 업무 유형, 조치, 담당 후보를 제안합니다.", "업무 판단 설명") }}
+            </div>
+          </div>
+          <div class="panel-body">
+            <div
+              id="mail-decision-panel"
+              class="mail-decision-panel"
+              hx-get="/ui/emails/{{ email.email_uid | urlencode }}/mail-decision-runs/latest"
+              hx-trigger="load"
+              hx-swap="outerHTML"
+            >
+              <div class="mail-decision-loading">최근 업무 판단 결과를 불러오는 중...</div>
+            </div>
+          </div>
+        </div>
+
+  {% if related %}
+    <section class="panel related-mails-panel">
+      <div class="panel-head">
+        <h3>Related Emails by Ref No.</h3>
+        <span class="label">{{ related | length }} match(es)</span>
+      </div>
+      <div class="panel-body">
+        {% if refs and related %}
+          <div class="related-mail-list">
+            {% for item in related %}
+              {% set item_classification = item.classification or {} %}
+              {% set item_label = item.mail_category or mail_category(item_classification) %}
+              <button
+                type="button"
+                class="related-mail-card"
+                data-email-index="{{ item.index }}"
+                data-email-uid="{{ item.email_uid }}"
+                hx-post="/ui/emails/{{ item.email_uid | urlencode }}"
+                hx-target="#email-detail"
+                hx-swap="innerHTML"
+                hx-on:click="if (document.getElementById('selectedEmailIndex')) document.getElementById('selectedEmailIndex').value='{{ item.index }}'; if (document.getElementById('selectedEmailUid')) document.getElementById('selectedEmailUid').value='{{ item.email_uid }}';"
+              >
+                <div class="related-mail-head">
+                  <strong>{{ item.subject or "(no subject)" }}</strong>
+                  {{ category_chip(item_label) }}
+                </div>
+                <div class="related-mail-meta">
+                  <span>
+                    {{ sender_contact_link(item) }}
+                    <span class="mono">&lt;{{ display_sender_address(item) }}&gt;</span>
+                  </span>
+                  <span>{{ format_mail_datetime(item.date or item.received_at or item.created_at) }}</span>
+                </div>
+                <div class="related-mail-refs">
+                  {% for ref in item.matched_refs or [] %}
+                    <span class="score-pill">Ref {{ ref }}</span>
+                  {% endfor %}
+                </div>
+              </button>
+            {% endfor %}
+          </div>
+        {% elif refs %}
+          <p class="subtle">같은 Ref No.를 공유하는 다른 이메일이 아직 없습니다.</p>
+        {% else %}
+          <p class="subtle">이 메일에서 추출된 Ref No.가 없어 관련 이메일을 연결할 수 없습니다.</p>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+  </article>
+{% endif %}

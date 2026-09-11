@@ -1,0 +1,407 @@
+{
+  "generated_at": "2026-07-31T04:51:16.369984+00:00",
+  "dataset_path": "/home/ysh/workspace/coramail_agent/data/evaluation/synthetic_mail_decision_dataset.clean.json",
+  "predictions_path": "/home/ysh/workspace/coramail_agent/data/evaluation/clean-v2/predictions.json",
+  "model_context": {
+    "workflow_version": "mail-decision-decision-agent-v1"
+  },
+  "metrics": {
+    "values": {
+      "total_cases": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "prediction_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "missing_prediction_count": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "execution_success_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "failed_count": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "failure_rate": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "review_required_count": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "review_required_rate": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "business_type_prediction_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "business_type_prediction_coverage": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "business_type_correct_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "business_type_accuracy_overall": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "business_type_accuracy_when_predicted": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "selected_assignee_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "selected_assignee_coverage": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "selected_assignee_correct_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "top1_assignee_accuracy_overall": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "top1_assignee_accuracy_when_selected": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "candidate_contains_expected_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "candidate_recall_at_k": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "candidate_mrr": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "auto_assigned_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "auto_assignment_rate": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "auto_assignment_correct_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "auto_assignment_accuracy": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "raw_prediction_count": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      }
+    },
+    "confusion_matrix": {
+      "certificate_request": {
+        "certificate_request": 1,
+        "claim": 0,
+        "order_change": 0,
+        "repair_request": 0,
+        "technical_inquiry": 0
+      },
+      "claim": {
+        "certificate_request": 0,
+        "claim": 1,
+        "order_change": 0,
+        "repair_request": 0,
+        "technical_inquiry": 0
+      },
+      "order_change": {
+        "certificate_request": 0,
+        "claim": 0,
+        "order_change": 1,
+        "repair_request": 0,
+        "technical_inquiry": 0
+      },
+      "repair_request": {
+        "certificate_request": 0,
+        "claim": 0,
+        "order_change": 0,
+        "repair_request": 1,
+        "technical_inquiry": 0
+      },
+      "technical_inquiry": {
+        "certificate_request": 0,
+        "claim": 0,
+        "order_change": 0,
+        "repair_request": 0,
+        "technical_inquiry": 1
+      }
+    },
+    "per_type_precision": {
+      "certificate_request": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "claim": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "order_change": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "repair_request": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "technical_inquiry": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      }
+    },
+    "per_type_recall": {
+      "certificate_request": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "claim": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "order_change": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "repair_request": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      },
+      "technical_inquiry": {
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "value": 1.0
+      }
+    },
+    "per_type_f1": {
+      "certificate_request": {
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "value": 1.0
+      },
+      "claim": {
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "value": 1.0
+      },
+      "order_change": {
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "value": 1.0
+      },
+      "repair_request": {
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "value": 1.0
+      },
+      "technical_inquiry": {
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "value": 1.0
+      }
+    },
+    "review_reason_counts": {
+      "none": 5
+    },
+    "primary_failure_stage_counts": {
+      "success": 5
+    },
+    "error_type_counts": {}
+  },
+  "cases": [
+    {
+      "email_message_id": "40d4b90a-b443-5a5b-85b0-41ec7e9fe95b",
+      "run_id": "788b5407-2b4b-496c-a624-ecb254fbea33",
+      "status": "completed",
+      "expected_business_type": "repair_request",
+      "predicted_business_type": "repair_request",
+      "business_type_correct": true,
+      "expected_assignee_user_id": "3f9959a7-9afe-59a8-a68a-9be22860aeba",
+      "candidate_user_ids": [
+        "3f9959a7-9afe-59a8-a68a-9be22860aeba",
+        "6064b0d3-4ef3-5aa9-bc41-a9d163386657",
+        "e83cee8d-180d-5086-a9bf-c8083e66ac76",
+        "a2249170-0133-5b7d-84a4-36e5fc301f82",
+        "944bfb85-b8b4-5d62-950b-9efacd85da07"
+      ],
+      "expected_assignee_rank": 1,
+      "candidate_contains_expected": true,
+      "selected_user_id": "3f9959a7-9afe-59a8-a68a-9be22860aeba",
+      "selected_assignee_correct": true,
+      "auto_assigned": true,
+      "review_reason": null,
+      "primary_failure_stage": "success",
+      "primary_failure_reason": "prediction matches ground truth",
+      "error": null
+    },
+    {
+      "email_message_id": "5c3c4f70-bbdf-53dc-badd-1f7a949d9e64",
+      "run_id": "c8458715-c5b8-42a1-982d-06ebf0a4673a",
+      "status": "completed",
+      "expected_business_type": "order_change",
+      "predicted_business_type": "order_change",
+      "business_type_correct": true,
+      "expected_assignee_user_id": "944bfb85-b8b4-5d62-950b-9efacd85da07",
+      "candidate_user_ids": [
+        "944bfb85-b8b4-5d62-950b-9efacd85da07",
+        "aebfecf0-80eb-5bec-b03e-a2dcc6f60e3e",
+        "3d2ba7a3-d4c2-5936-b320-6496bc4356b9",
+        "1e27fe91-dc00-5a7a-8a8e-ad91675ec5db",
+        "a2249170-0133-5b7d-84a4-36e5fc301f82"
+      ],
+      "expected_assignee_rank": 1,
+      "candidate_contains_expected": true,
+      "selected_user_id": "944bfb85-b8b4-5d62-950b-9efacd85da07",
+      "selected_assignee_correct": true,
+      "auto_assigned": true,
+      "review_reason": null,
+      "primary_failure_stage": "success",
+      "primary_failure_reason": "prediction matches ground truth",
+      "error": null
+    },
+    {
+      "email_message_id": "9a950161-93c1-5330-b05a-ecebbb2808ef",
+      "run_id": "2ab5609b-80dc-4f70-b410-31ae37fab4f6",
+      "status": "completed",
+      "expected_business_type": "technical_inquiry",
+      "predicted_business_type": "technical_inquiry",
+      "business_type_correct": true,
+      "expected_assignee_user_id": "3d2ba7a3-d4c2-5936-b320-6496bc4356b9",
+      "candidate_user_ids": [
+        "3d2ba7a3-d4c2-5936-b320-6496bc4356b9",
+        "944bfb85-b8b4-5d62-950b-9efacd85da07",
+        "1e27fe91-dc00-5a7a-8a8e-ad91675ec5db",
+        "3f9959a7-9afe-59a8-a68a-9be22860aeba",
+        "aebfecf0-80eb-5bec-b03e-a2dcc6f60e3e"
+      ],
+      "expected_assignee_rank": 1,
+      "candidate_contains_expected": true,
+      "selected_user_id": "3d2ba7a3-d4c2-5936-b320-6496bc4356b9",
+      "selected_assignee_correct": true,
+      "auto_assigned": true,
+      "review_reason": null,
+      "primary_failure_stage": "success",
+      "primary_failure_reason": "prediction matches ground truth",
+      "error": null
+    },
+    {
+      "email_message_id": "1506efa5-23a0-52bb-817e-478d1a4658b0",
+      "run_id": "abf86333-deee-4477-ad73-d91a03cbbbcb",
+      "status": "completed",
+      "expected_business_type": "certificate_request",
+      "predicted_business_type": "certificate_request",
+      "business_type_correct": true,
+      "expected_assignee_user_id": "a2249170-0133-5b7d-84a4-36e5fc301f82",
+      "candidate_user_ids": [
+        "a2249170-0133-5b7d-84a4-36e5fc301f82",
+        "e83cee8d-180d-5086-a9bf-c8083e66ac76",
+        "3f9959a7-9afe-59a8-a68a-9be22860aeba",
+        "6064b0d3-4ef3-5aa9-bc41-a9d163386657",
+        "944bfb85-b8b4-5d62-950b-9efacd85da07"
+      ],
+      "expected_assignee_rank": 1,
+      "candidate_contains_expected": true,
+      "selected_user_id": "a2249170-0133-5b7d-84a4-36e5fc301f82",
+      "selected_assignee_correct": true,
+      "auto_assigned": true,
+      "review_reason": null,
+      "primary_failure_stage": "success",
+      "primary_failure_reason": "prediction matches ground truth",
+      "error": null
+    },
+    {
+      "email_message_id": "b682e4b6-93a4-5e19-9f56-512b3112028f",
+      "run_id": "8daa4f90-5e00-46ba-9814-490db7a2e092",
+      "status": "completed",
+      "expected_business_type": "claim",
+      "predicted_business_type": "claim",
+      "business_type_correct": true,
+      "expected_assignee_user_id": "aebfecf0-80eb-5bec-b03e-a2dcc6f60e3e",
+      "candidate_user_ids": [
+        "aebfecf0-80eb-5bec-b03e-a2dcc6f60e3e",
+        "944bfb85-b8b4-5d62-950b-9efacd85da07",
+        "3d2ba7a3-d4c2-5936-b320-6496bc4356b9",
+        "1e27fe91-dc00-5a7a-8a8e-ad91675ec5db",
+        "e83cee8d-180d-5086-a9bf-c8083e66ac76"
+      ],
+      "expected_assignee_rank": 1,
+      "candidate_contains_expected": true,
+      "selected_user_id": "aebfecf0-80eb-5bec-b03e-a2dcc6f60e3e",
+      "selected_assignee_correct": true,
+      "auto_assigned": true,
+      "review_reason": null,
+      "primary_failure_stage": "success",
+      "primary_failure_reason": "prediction matches ground truth",
+      "error": null
+    }
+  ],
+  "failure_summary": {
+    "missing_prediction_ids": [],
+    "duplicate_prediction_ids": [],
+    "unexpected_prediction_ids": [],
+    "trace_integrity_errors": [],
+    "leakage": {
+      "ground_truth_and_qdrant_id_overlap": 0,
+      "qdrant_cases_with_target_body_text": 0,
+      "qdrant_cases_with_direct_labels": 0,
+      "leakage_detected": false
+    }
+  },
+  "passed": true
+}

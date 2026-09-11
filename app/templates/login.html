@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login | CoRA Mail AI Router</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v={{ asset_version }}">
+</head>
+<body class="login-body">
+  <main class="login-shell">
+    <div class="login-logo" aria-label="CoRA Mail">
+      <span class="login-logo-copy">
+        <strong>CoRA Mail</strong>
+        <span>Corporate Routing Assistant</span>
+      </span>
+    </div>
+    <section class="login-panel" aria-labelledby="login-title">
+      <h1 id="login-title">로그인</h1>
+      <form class="login-form" method="post" action="/login?next={{ next_path|urlencode }}">
+        <label>
+          <span>Username</span>
+          <input class="input" name="username" autocomplete="username" autofocus required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input class="input" type="password" name="password" autocomplete="current-password" required>
+        </label>
+        {% if error %}
+          <div class="login-error" role="alert">{{ error }}</div>
+        {% endif %}
+        <button class="btn" type="submit">
+          <span class="material-symbols-outlined">login</span>
+          Login
+        </button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

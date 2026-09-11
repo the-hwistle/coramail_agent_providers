@@ -1,0 +1,50 @@
+{% from "macros.html" import category_chip with context %}
+<section id="routingSummaryPanel" class="settings-unified-rules">
+  <div class="settings-unified-rule-list">
+    {% for category in category_order[:-1] %}
+      {% set route_match = namespace(item=None) %}
+      {% for route in route_assignments %}
+        {% if route.label == category %}
+          {% set route_match.item = route %}
+        {% endif %}
+      {% endfor %}
+      <article class="settings-unified-rule-row{% if not route_match.item or not route_match.item.assignees %} is-empty{% endif %}">
+        <div class="settings-unified-rule-policy">
+          <div class="settings-unified-rule-topline">
+            {{ category_chip(category) }}
+          </div>
+        </div>
+        <div class="settings-unified-rule-assignees" data-routing-assignee-list data-routing-label="{{ category }}">
+          {% if route_match.item and route_match.item.assignees %}
+            {% for assignee in route_match.item.assignees %}
+              <div
+                class="routing-summary-assignee{% if not assignee.is_active %} is-inactive{% endif %}"
+                draggable="true"
+                data-routing-assignee-chip
+                data-assignee-id="{{ assignee.assignee_id }}"
+              >
+                <span class="material-symbols-outlined routing-summary-grip" aria-hidden="true" data-routing-drag-handle>drag_indicator</span>
+                <span class="routing-summary-assignee-name">{{ assignee.assignee_name or "-" }}</span>
+                <button
+                  class="routing-active-toggle"
+                  type="button"
+                  aria-label="{% if assignee.is_active %}담당자 비활성화{% else %}담당자 활성화{% endif %}"
+                  title="{% if assignee.is_active %}담당자 비활성화{% else %}담당자 활성화{% endif %}"
+                  data-routing-active-toggle
+                  data-assignee-id="{{ assignee.assignee_id }}"
+                ></button>
+              </div>
+            {% endfor %}
+          {% else %}
+            <span class="routing-summary-empty">담당자 없음</span>
+          {% endif %}
+        </div>
+        <div class="settings-unified-rule-state">
+          <span class="status-badge {% if route_match.item and route_match.item.active_assignee_count %}status-success{% else %}status-warning{% endif %}">
+            {% if route_match.item and route_match.item.active_assignee_count %}Assigned{% else %}Unassigned{% endif %}
+          </span>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</section>

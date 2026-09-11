@@ -1,0 +1,91 @@
+<section class="view page-view chats-view" data-view="chats">
+  <div id="chat-results" class="chat-shell {% if demo_mode %}chat-shell--with-examples{% else %}chat-shell--without-examples{% endif %}">
+    <div class="chat-thread" data-chat-thread>
+      <div id="chat-results-body" class="chat-thread-body" aria-live="polite">
+        {% include "partials/chats_results.html" %}
+      </div>
+    </div>
+
+    <form
+      class="search-box chat-composer"
+      action="{% if demo_mode %}/ui/chats{% else %}/ui/chats-results{% endif %}"
+      method="get"
+      hx-get="/ui/chats-results"
+      hx-target="#chat-results-body"
+      hx-swap="innerHTML"
+      hx-indicator="#chat-results"
+      hx-disabled-elt="find input, find button"
+      data-chat-composer
+    >
+      <input id="chatSessionInput" type="hidden" name="session_id" value="{{ session_id }}">
+      <input id="chatHistoryInput" type="hidden" name="chat_history" value='{{ compact_turns|default([])|tojson }}'>
+      <div class="search-box-field">
+        <input
+          id="chatQueryInput"
+          class="input"
+          name="q"
+          value="{{ query }}"
+          aria-label="메일함 대화 질문"
+          autocomplete="off"
+          required
+        >
+      </div>
+      <div class="search-box-side">
+        <button class="btn" type="submit">
+          <span class="material-symbols-outlined" aria-hidden="true">send</span>
+          전송
+        </button>
+      </div>
+    </form>
+
+    {% if demo_mode %}
+      <div class="search-example-strip chat-example-strip" aria-label="시연 대화 예시">
+        <button
+          class="search-example-btn"
+          type="button"
+          data-search-input="#chatQueryInput"
+          data-search-example="QT-2026-0812-03 견적서의 납기와 총액"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">request_quote</span>
+          견적서 납기·총액
+        </button>
+        <button
+          class="search-example-btn"
+          type="button"
+          data-search-input="#chatQueryInput"
+          data-search-example="URG-DEMO-2026-0810-01 긴급 장애 메일 찾아줘"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+          긴급 장애 메일
+        </button>
+        <button
+          class="search-example-btn"
+          type="button"
+          data-search-input="#chatQueryInput"
+          data-search-example="가장 최신 메일이 뭐야"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+          최신 메일
+        </button>
+      </div>
+    {% endif %}
+
+    <template id="chatPendingTemplate">
+      <div class="chat-conversation chat-conversation-pending">
+        <div class="chat-message chat-message-user">
+          <div class="chat-bubble" data-chat-pending-query></div>
+        </div>
+        <div class="chat-message-group chat-message-group-assistant">
+          <div class="chat-message chat-message-assistant">
+            <div class="chat-avatar" aria-hidden="true">AI</div>
+            <div class="chat-bubble chat-loading-bubble">
+              <span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <strong>답변 생성 중</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+  <aside class="assignee-detail-drawer chat-email-drawer" id="chatEmailDetailDrawer" aria-live="polite" hidden></aside>
+</section>

@@ -1,0 +1,13 @@
+<div class="ops-inspector-shell">
+  <div class="ops-inspector-head">
+    <div>
+      <strong>{{ email.subject or "(no subject)" }}</strong>
+    </div>
+    <button type="button" class="icon-btn" title="닫기" aria-label="메일 상세 닫기" data-ops-inspector-close>
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+  <div class="ops-inspector-body">
+    {% include "partials/email_detail.html" %}
+  </div>
+</div>

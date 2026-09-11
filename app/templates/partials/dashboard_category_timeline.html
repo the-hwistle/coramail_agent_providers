@@ -1,0 +1,41 @@
+{% from "macros.html" import info_tooltip with context %}
+{% set timeline = category_timeline or {} %}
+{% set chart_palette = category_chart_palette(category_order) %}
+
+<div
+  class="timeline-chart-shell"
+  data-dashboard-category-timeline
+  data-chart-categories='{{ category_order | tojson | forceescape }}'
+  data-chart-palette='{{ chart_palette | tojson | forceescape }}'
+  data-chart-timeline-labels='{{ timeline.labels | default([]) | tojson | forceescape }}'
+  data-chart-timeline-datasets='{{ timeline.datasets | default({}) | tojson | forceescape }}'
+>
+  <div class="timeline-chart-head">
+    <div class="timeline-chart-copy dashboard-card-title-stack">
+      <div class="dashboard-card-title-row">
+        <span class="label dashboard-card-title">Daily Inflow</span>
+        {{ info_tooltip("최근 유입량 변화를 날짜 단위로 추적합니다.", "일별 유입 설명") }}
+      </div>
+      <span>최근 {{ timeline.labels | default([]) | length }}일</span>
+    </div>
+    <div class="timeline-chart-legend" aria-label="Daily inflow legend">
+      {% for category in category_order %}
+        <button
+          type="button"
+          class="timeline-legend-chip"
+          data-timeline-category-toggle="{{ category }}"
+          aria-pressed="true"
+        >
+          <span class="timeline-legend-dot"></span>
+          {{ category }}
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="timeline-chart-wrap">
+    <canvas id="categoryTimeline" role="img"
+      aria-label="날짜별 카테고리 유입 건수 막대 차트.">
+      {% for label in timeline.labels | default([]) %}{{ label }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </canvas>
+  </div>
+</div>

@@ -1,0 +1,7 @@
+Customer: Synthetic Marine Customer 07
+Project: PRJ-2026-006
+Vessel: SYNTHETIC VESSEL 06
+Product group: automation
+Request type: purchase_order
+Reference: PO-000115
+Please review and respond.

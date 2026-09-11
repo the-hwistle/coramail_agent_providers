@@ -1,0 +1,85 @@
+{
+  "leaky": {
+    "baseline_dir": "data/evaluation/baselines/leaky-20260730171509",
+    "metrics": {
+      "execution_success": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "review_required": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "business_type_coverage": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "business_type_accuracy": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "candidate_recall": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "top1_accuracy": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      }
+    }
+  },
+  "clean": {
+    "baseline_dir": "data/evaluation/clean-v2",
+    "metrics": {
+      "execution_success": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "review_required": {
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "value": 1.0
+      },
+      "business_type_coverage": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "business_type_accuracy": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "candidate_recall": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      },
+      "top1_accuracy": {
+        "numerator": 0.0,
+        "denominator": 5.0,
+        "value": 0.0
+      }
+    }
+  },
+  "delta": {
+    "execution_success": 0.0,
+    "review_required": 0.0,
+    "business_type_coverage": 0.0,
+    "business_type_accuracy": 0.0,
+    "candidate_recall": 0.0,
+    "top1_accuracy": 0.0
+  },
+  "interpretation": [
+    "Leakage existed in the previous baseline, but the current 5-case pipeline remains blocked before useful retrieval/routing measurement.",
+    "Clean baseline still has zero business type and assignee coverage, so leakage removal does not improve observed metrics yet.",
+    "Leakage removal is required before future retrieval and routing performance claims are meaningful."
+  ]
+}

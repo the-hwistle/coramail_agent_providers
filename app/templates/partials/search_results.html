@@ -1,0 +1,102 @@
+{% from "macros.html" import info_tooltip with context %}
+{% if error %}
+  <div class="notice danger">{{ error }}</div>
+{% elif not result %}
+  <section class="panel search-empty-panel">
+    <div class="panel-body">
+      <div class="empty-state">
+        <span class="material-symbols-outlined">manage_search</span>
+        <strong>메일함과 첨부 문서에서 확인할 내용을 질문해 주세요.</strong>
+      </div>
+    </div>
+  </section>
+{% else %}
+  <div class="search-results-stack">
+    <section class="panel search-answer-panel">
+      <div class="panel-head">
+        <div class="panel-title-row">
+          <h2>답변</h2>
+          {{ info_tooltip("현재 표시 모드의 메일과 첨부 분석을 의미·단어 기반으로 검색한 뒤, LLM이 직접 관련성을 판정한 근거만 사용해 답변합니다.", "답변 설명") }}
+        </div>
+        <span class="label">근거 {{ result.results | length }}개</span>
+      </div>
+      <div class="panel-body prose">
+        {% include "partials/search_answer.html" %}
+      </div>
+    </section>
+
+    <section class="panel result-panel">
+      <div class="panel-head">
+        <div class="panel-title-row">
+          <h2>근거</h2>
+          {{ info_tooltip("LLM 관련성 기준을 통과해 실제 답변 생성에 사용된 메일 본문과 첨부 문서 근거입니다.", "근거 결과 설명") }}
+        </div>
+      </div>
+      <div class="panel-body result-list">
+        {% for item in result.results or [] %}
+          {% set source_label = item.source or "" %}
+          <article class="result-card">
+            <div class="result-rank">{{ loop.index }}</div>
+            <div class="result-content">
+              <div class="result-card-head">
+                <div class="result-source">
+                  <span class="status-badge {% if item.payload.filename or item.payload.stored_name %}status-violet{% else %}status-indigo{% endif %}">
+                    {{ "Attachment" if item.payload.filename or item.payload.stored_name else "Mail Body" }}
+                  </span>
+                  {% if source_label and source_label | lower != "unknown" %}
+                    <strong>{{ source_label }}</strong>
+                  {% endif %}
+                </div>
+                <div class="result-card-actions">
+                  {% if item.detail_url %}
+                    <a
+                      class="btn secondary result-detail-button"
+                      href="{{ item.detail_url }}"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                      <span>원본 메일 보기</span>
+                    </a>
+                  {% endif %}
+                </div>
+              </div>
+              {% set keyword_state = namespace(has_visible=false) %}
+              {% for ref in item.business_refs or [] %}
+                {% if ref and ref | lower != "unknown" %}
+                  {% set keyword_state.has_visible = true %}
+                {% endif %}
+              {% endfor %}
+              {% for vessel in item.vessel_names or [] %}
+                {% if vessel and vessel | lower != "unknown" %}
+                  {% set keyword_state.has_visible = true %}
+                {% endif %}
+              {% endfor %}
+              {% if keyword_state.has_visible %}
+                <div class="result-evidence-tags">
+                  {% for ref in item.business_refs or [] %}
+                    {% if ref and ref | lower != "unknown" %}
+                      <span class="status-badge status-slate">Ref {{ ref }}</span>
+                    {% endif %}
+                  {% endfor %}
+                  {% for vessel in item.vessel_names or [] %}
+                    {% if vessel and vessel | lower != "unknown" %}
+                      <span class="status-badge status-slate">{{ vessel }}</span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if item.match_explanation %}
+                <p class="match-explanation">{{ item.match_explanation }}</p>
+              {% endif %}
+            </div>
+          </article>
+        {% else %}
+          <div class="empty-state empty-state-inline">
+            <span class="material-symbols-outlined">search_off</span>
+            <strong>검색 결과가 없습니다.</strong>
+            <p>참조번호나 문서 유형을 더 구체적으로 입력해보세요.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+{% endif %}

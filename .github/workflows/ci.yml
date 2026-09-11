@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-suffix: py${{ matrix.python-version }}
+      - name: Sync dependencies
+        run: uv sync --frozen --python ${{ matrix.python-version }}
+      - name: Compile Python
+        run: uv run python -m compileall app tests
+      - name: Pytest
+        run: uv run pytest -q
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Ruff core contracts
+        run: >-
+          uv run ruff check
+          --select I,UP,B
+          app/routing
+          app/evaluation/runner.py
+          app/schemas
+      - name: Typecheck core contracts
+        if: matrix.python-version == '3.10'
+        run: >-
+          uv run --with pyright==1.1.405 pyright
+          --pythonversion 3.10
+          app/routing/policy.py
+          app/evaluation/runner.py
+          app/schemas
+
+  ui-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-suffix: ui-py312
+      - name: Sync Python dependencies
+        run: uv sync --frozen --python 3.12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run UI smoke test
+        run: npm run test:e2e:ui-smoke

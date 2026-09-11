@@ -1,0 +1,69 @@
+{% from "macros.html" import info_tooltip with context %}
+{% set overview = routing_overview or {} %}
+{% set overview_all = routing_overview_all or overview %}
+{% set total = overview.total or 0 %}
+{% set all_total = overview_all.total or 0 %}
+
+{% if total or all_total %}
+  <div
+    class="routing-overview-dashboard"
+    data-dashboard-routing-overview
+    data-route-labels='{{ overview.assignee_labels | tojson | forceescape }}'
+    data-route-counts='{{ overview.assignee_counts | tojson | forceescape }}'
+    data-route-palette='{{ overview.route_palette | tojson | forceescape }}'
+    data-route-total="{{ total }}"
+  >
+    <div class="dashboard-card-title-row">
+      <div class="dashboard-card-title-copy">
+        <span class="label dashboard-card-title">Routing Overview</span>
+        {{ info_tooltip("담당자별 처리 현황과 편중 여부를 점검합니다.", "라우팅 개요 설명") }}
+      </div>
+      {% if dashboard_scope_toggle_enabled %}
+        <div class="dashboard-scope-control">
+          <div class="dashboard-scope-toggle" role="group" aria-label="Routing Overview scope">
+            <button type="button" class="dashboard-scope-toggle-button is-active" data-dashboard-routing-scope="today" aria-pressed="true">Today</button>
+            <button type="button" class="dashboard-scope-toggle-button" data-dashboard-routing-scope="all" aria-pressed="false">All</button>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    {% for scope_key, scoped_overview in [("today", overview), ("all", overview_all)] %}
+      {% set scoped_total = scoped_overview.total or 0 %}
+      <div
+        class="routing-overview-scope{% if scope_key != "today" %} is-hidden{% endif %}"
+        data-dashboard-routing-panel="{{ scope_key }}"
+        data-dashboard-routing-total="{{ scoped_total }}"
+      >
+        <div class="routing-overview-workload" aria-label="담당자별 배정 현황">
+          {% for assignee in (scoped_overview.workload_assignees or []) %}
+            <div class="routing-overview-workload-row">
+              <div class="routing-overview-workload-head">
+                <span>{{ assignee.label }}</span>
+                <strong>{{ assignee.count }}건</strong>
+              </div>
+              <div class="routing-overview-bar-track" aria-hidden="true">
+                <span class="routing-overview-bar-fill" style="width: {{ assignee.bar_display_percent or assignee.bar_percent }}%;"></span>
+              </div>
+            </div>
+          {% else %}
+            <div class="routing-overview-empty">배정된 담당자가 없습니다.</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+    {% if dashboard_scope_toggle_enabled %}
+      <div class="routing-overview-total" data-dashboard-routing-scope-total>총 {{ total }}건</div>
+    {% endif %}
+  </div>
+{% else %}
+  <div class="routing-overview-dashboard">
+    <div class="dashboard-card-title-row">
+      <div class="dashboard-card-title-copy">
+        <span class="label dashboard-card-title">Routing Overview</span>
+        {{ info_tooltip("담당자별 처리 현황과 편중 여부를 점검합니다.", "라우팅 개요 설명") }}
+      </div>
+    </div>
+    <div class="empty small">표시할 라우팅 데이터가 없습니다.</div>
+  </div>
+{% endif %}

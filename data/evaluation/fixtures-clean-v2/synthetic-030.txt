@@ -1,0 +1,7 @@
+Customer: Synthetic Marine Customer 06
+Project: PRJ-2026-001
+Vessel: SYNTHETIC VESSEL 01
+Product group: engine
+Request type: service_request
+Reference: REF-000030
+Please review and respond.

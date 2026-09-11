@@ -1,0 +1,7 @@
+Customer: Synthetic Marine Customer 12
+Project: PRJ-2026-001
+Vessel: SYNTHETIC VESSEL 01
+Product group: engine
+Request type: quotation_request
+Reference: REF-000120
+Please review and respond.

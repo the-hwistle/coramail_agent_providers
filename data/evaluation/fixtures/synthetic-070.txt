@@ -1,0 +1,7 @@
+Customer: Synthetic Marine Customer 10
+Project: PRJ-2026-006
+Vessel: SYNTHETIC VESSEL 06
+Product group: engine
+Request type: invoice
+Reference: REF-000070
+Please review and respond.

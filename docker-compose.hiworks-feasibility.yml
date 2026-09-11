@@ -1,0 +1,61 @@
+name: coramail-agent-hiworks-feasibility
+
+services:
+  web:
+    environment:
+      CORAMAIL_ENV_FILE: /app/config/hiworks-feasibility.env
+      CORAMAIL_MAIL_PROVIDER: hiworks
+      CORAMAIL_RUNTIME_DIR: ${CORAMAIL_RUNTIME_DIR:-data/runtime/hiworks_feasibility}
+      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail_hiworks_feasibility}
+      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_hiworks_feasibility}
+      GOOGLE_CREDENTIALS_JSON: ""
+      GOOGLE_TOKEN_JSON: ""
+      GOOGLE_SEND_TOKEN_JSON: ""
+      CORAMAIL_HIWORKS_POP3_HOST: ${CORAMAIL_HIWORKS_POP3_HOST:-pop3s.hiworks.com}
+      CORAMAIL_HIWORKS_POP3_PORT: ${CORAMAIL_HIWORKS_POP3_PORT:-995}
+      CORAMAIL_HIWORKS_SMTP_HOST: ${CORAMAIL_HIWORKS_SMTP_HOST:-smtps.hiworks.com}
+      CORAMAIL_HIWORKS_SMTP_PORT: ${CORAMAIL_HIWORKS_SMTP_PORT:-465}
+      CORAMAIL_HIWORKS_MAIL_ADDRESS: ${CORAMAIL_HIWORKS_MAIL_ADDRESS:-}
+      CORAMAIL_HIWORKS_POP3_USERNAME: ${CORAMAIL_HIWORKS_POP3_USERNAME:-}
+      CORAMAIL_HIWORKS_APP_PASSWORD: ${CORAMAIL_HIWORKS_APP_PASSWORD:-}
+      CORAMAIL_HIWORKS_MAX_RESULTS: ${CORAMAIL_HIWORKS_MAX_RESULTS:-0}
+    volumes:
+      - .:/app
+      - coramail_hiworks_uv_cache:/root/.cache/uv
+
+  bootstrap:
+    environment:
+      CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER:-coramail}:${CORAMAIL_POSTGRES_PASSWORD:-coramail}@postgres:5432/${CORAMAIL_POSTGRES_DB:-coramail_hiworks_feasibility}
+      CORAMAIL_QDRANT_CASE_COLLECTION: ${CORAMAIL_QDRANT_CASE_COLLECTION:-coramail_cases_hiworks_feasibility}
+
+  postgres:
+    volumes:
+      - coramail_hiworks_postgres_data:/var/lib/postgresql/data
+
+  qdrant:
+    volumes:
+      - coramail_hiworks_qdrant_data:/qdrant/storage
+
+  ollama:
+    volumes:
+      - coramail_hiworks_ollama_data:/root/.ollama
+
+  vllm-text:
+    volumes:
+      - coramail_hiworks_hf_cache:/root/.cache/huggingface
+
+  vllm-embedding:
+    volumes:
+      - coramail_hiworks_hf_cache:/root/.cache/huggingface
+
+volumes:
+  coramail_hiworks_postgres_data:
+    name: coramail_agent_hiworks_feasibility_postgres_data
+  coramail_hiworks_qdrant_data:
+    name: coramail_agent_hiworks_feasibility_qdrant_data
+  coramail_hiworks_ollama_data:
+    name: coramail_agent_hiworks_feasibility_ollama_data
+  coramail_hiworks_hf_cache:
+    name: coramail_agent_hiworks_feasibility_hf_cache
+  coramail_hiworks_uv_cache:
+    name: coramail_agent_hiworks_feasibility_uv_cache

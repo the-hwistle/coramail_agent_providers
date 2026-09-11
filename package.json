@@ -1,0 +1,12 @@
+{
+  "name": "coramail-agent-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui-smoke": "playwright test tests/e2e/my-work-monitoring.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

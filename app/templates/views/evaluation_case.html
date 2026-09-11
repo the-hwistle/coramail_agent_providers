@@ -1,0 +1,147 @@
+<section class="view page-view evaluation-case-view" data-view="evaluation">
+  {% if not evaluation_case.available %}
+    <section class="panel evaluation-empty">
+      <div class="panel-body">{{ evaluation_case.message }}</div>
+    </section>
+  {% else %}
+    {% set case = evaluation_case.case %}
+    {% set trace = evaluation_case.trace %}
+    <header class="evaluation-case-head">
+      <a href="/ui/evaluation?report={{ evaluation_case.report_id }}">Evaluation</a>
+      <h1>{{ case.email_message_id }}</h1>
+      <p>{{ case.primary_failure_stage }} - {{ case.primary_failure_reason }}</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Summary</h2></div>
+      <div class="panel-body evaluation-kv-grid">
+        <div><span>Status</span><strong>{{ case.status }}</strong></div>
+        <div><span>Run ID</span><strong>{{ case.run_id or "-" }}</strong></div>
+        <div><span>Expected Type</span><strong>{{ case.expected_business_type }}</strong></div>
+        <div><span>Predicted Type</span><strong>{{ case.predicted_business_type or "-" }}</strong></div>
+        <div><span>Expected Assignee Rank</span><strong>{{ case.expected_assignee_rank or "-" }}</strong></div>
+        <div><span>Selected Assignee</span><strong>{{ case.selected_user_id or "-" }}</strong></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Input & Ground Truth</h2></div>
+      <div class="panel-body">
+        <table class="compact-table">
+          <tbody>
+            <tr><th>Subject</th><td>{{ trace.input.subject }}</td></tr>
+            <tr><th>Body preview</th><td>{{ trace.input.body_preview }}</td></tr>
+            <tr><th>Body length</th><td>{{ trace.input.body_length }}</td></tr>
+            <tr><th>Body SHA-256</th><td class="mono">{{ trace.input.body_sha256 }}</td></tr>
+            <tr><th>Attachments</th><td>{{ trace.input.attachment_filenames|join(", ") }}</td></tr>
+            <tr><th>Ground truth</th><td><pre>{{ trace.ground_truth|json_pretty }}</pre></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Facts</h2></div>
+      <div class="panel-body">
+        <table class="evaluation-table">
+          <thead><tr><th>field</th><th>expected</th><th>actual</th><th>present</th><th>match</th></tr></thead>
+          <tbody>
+            {% for field, item in evaluation_case.facts_comparison.items() %}
+              <tr>
+                <td>{{ field }}</td>
+                <td>{{ item.expected }}</td>
+                <td>{{ item.actual }}</td>
+                <td>{{ item.present }}</td>
+                <td>{{ item.match }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Attachments</h2></div>
+      <div class="panel-body"><pre>{{ trace.attachments|json_pretty }}</pre></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Retrieval</h2></div>
+      <div class="panel-body">
+        {% for cycle in evaluation_case.retrieval_cycles %}
+          <h3>Cycle {{ cycle.cycle }} - {{ cycle.strategy }}</h3>
+          <table class="evaluation-table">
+            <thead>
+              <tr><th>strategy</th><th>query</th><th>candidate ID</th><th>score</th><th>included</th><th>excluded reason</th></tr>
+            </thead>
+            <tbody>
+              {% for hit in cycle.hits %}
+                <tr>
+                  <td>{{ hit.strategy }}</td>
+                  <td>{{ hit.query_text }}</td>
+                  <td>{{ hit.candidate_id }}</td>
+                  <td>{{ hit.score }}</td>
+                  <td>{{ hit.included_in_prompt }}</td>
+                  <td>{{ hit.excluded_reason or "-" }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="6">No retrieval hits recorded.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p>No retrieval cycles recorded.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Sufficiency</h2></div>
+      <div class="panel-body">
+        <table class="compact-table">
+          <tbody>
+            <tr><th>required</th><td>{{ evaluation_case.sufficiency.required_context }}</td></tr>
+            <tr><th>resolved</th><td>{{ evaluation_case.sufficiency.resolved_context }}</td></tr>
+            <tr><th>unresolved</th><td>{{ evaluation_case.sufficiency.unresolved_context }}</td></tr>
+            <tr><th>sufficient</th><td>{{ evaluation_case.sufficiency.sufficient }}</td></tr>
+            <tr><th>review reason</th><td>{{ evaluation_case.sufficiency.review_reason or "-" }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Decision</h2></div>
+      <div class="panel-body"><pre>{{ trace.decision|json_pretty }}</pre></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Routing</h2></div>
+      <div class="panel-body">
+        <table class="evaluation-table">
+          <thead>
+            <tr><th>candidate</th><th>rank</th><th>scores</th><th>eligible</th><th>excluded reason</th><th>selected</th><th>expected</th></tr>
+          </thead>
+          <tbody>
+            {% for candidate in evaluation_case.routing.candidates %}
+              <tr>
+                <td>{{ candidate.candidate_user_id }}</td>
+                <td>{{ candidate.candidate_rank }}</td>
+                <td><pre>{{ candidate.component_scores|json_pretty }}</pre></td>
+                <td>{{ candidate.eligible }}</td>
+                <td>{{ candidate.excluded_reason or "-" }}</td>
+                <td>{{ candidate.selected }}</td>
+                <td>{{ candidate.expected_assignee }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7">No routing candidates recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <pre>{{ evaluation_case.routing.score_observability|json_pretty }}</pre>
+      </div>
+    </section>
+
+    {% include "partials/evaluation_trace.html" %}
+  {% endif %}
+</section>

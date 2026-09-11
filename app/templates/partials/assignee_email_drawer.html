@@ -1,0 +1,14 @@
+<div class="assignee-detail-drawer-shell">
+  <div class="assignee-detail-drawer-head">
+    <div>
+      <strong>{{ email.subject or "(no subject)" }}</strong>
+      <span>{{ display_sender_name(email) }}{% if display_sender_address(email) %} · {{ display_sender_address(email) }}{% endif %}</span>
+    </div>
+    <button type="button" class="icon-btn" title="닫기" aria-label="이메일 상세 닫기" data-assignee-detail-close>
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+  <div class="assignee-detail-drawer-body">
+    {% include "partials/email_detail.html" %}
+  </div>
+</div>

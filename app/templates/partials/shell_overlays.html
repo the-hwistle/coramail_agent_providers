@@ -1,0 +1,40 @@
+  {% if not demo_mode %}
+    <div class="gmail-settings-modal" id="gmailSettingsModal" role="dialog" aria-modal="true" aria-labelledby="gmailSettingsTitle" hidden>
+      <div class="gmail-settings-backdrop" data-gmail-settings-close></div>
+      <section class="gmail-settings-dialog" tabindex="-1">
+        <header class="gmail-settings-dialog-head">
+          <div>
+            <h2 id="gmailSettingsTitle">{{ mail_provider_label }} Mail 계정 연동 설정</h2>
+          </div>
+          <button class="icon-btn" type="button" data-gmail-settings-close aria-label="{{ mail_provider_label }} Mail 동기화 설정 닫기">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </header>
+        <div class="gmail-settings-dialog-body">
+          {% include "partials/gmail_sync_settings.html" %}
+        </div>
+      </section>
+    </div>
+  {% endif %}
+
+  <div class="manual-route-confirm-modal" id="manualRouteConfirmModal" role="dialog" aria-modal="true" aria-labelledby="manualRouteConfirmTitle" aria-describedby="manualRouteConfirmMessage" hidden>
+    <div class="manual-route-confirm-backdrop" data-manual-route-confirm-cancel></div>
+    <section class="manual-route-confirm-dialog" tabindex="-1">
+      <div class="manual-route-confirm-icon" aria-hidden="true">
+        <span class="material-symbols-outlined" data-action-confirm-icon>forward_to_inbox</span>
+      </div>
+      <div class="manual-route-confirm-content">
+        <p class="manual-route-confirm-eyebrow" id="manualRouteConfirmEyebrow">수동 라우팅</p>
+        <h2 id="manualRouteConfirmTitle">담당자에게 전달할까요?</h2>
+        <p id="manualRouteConfirmMessage">이 메일을 현재 담당자에게 수동 라우팅하시겠습니까?</p>
+      </div>
+      <div class="manual-route-confirm-actions">
+        <button class="btn manual-route-confirm-secondary" type="button" data-manual-route-confirm-cancel>취소</button>
+        <button class="btn manual-route-confirm-primary" type="button" data-manual-route-confirm-submit>
+          <span class="material-symbols-outlined" data-action-confirm-submit-icon>forward_to_inbox</span>
+          <span data-action-confirm-submit-label>전달</span>
+        </button>
+      </div>
+    </section>
+  </div>
+  <div class="copy-toast" data-copy-toast role="status" aria-live="polite" aria-atomic="true" hidden>복사됐습니다.</div>

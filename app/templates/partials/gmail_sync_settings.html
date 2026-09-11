@@ -1,0 +1,243 @@
+<div
+  class="gmail-connect-panel"
+  id="gmailSyncSettings"
+  data-gmail-account-label="{{ gmail_sync.email_address or mail_provider_label ~ ' Mail 계정 미확인' }}"
+>
+  {% if gmail_settings_message %}
+    <div class="notice">{{ gmail_settings_message }}</div>
+  {% endif %}
+  {% if gmail_settings_error or gmail_sync.last_sync_error %}
+    <div class="notice danger">{{ gmail_settings_error or gmail_sync.last_sync_error }}</div>
+  {% endif %}
+
+  <section class="gmail-connect-hero">
+    <div class="gmail-connect-icon" aria-hidden="true">
+      <span class="material-symbols-outlined">mail</span>
+    </div>
+    <div class="gmail-connect-copy">
+      <div class="gmail-connect-title-row">
+        <h3>
+          {% if gmail_sync.connected %}
+            {{ mail_provider_label }} Mail 연동됨
+          {% elif mail_provider == "gmail" %}
+            Google 계정 권한 요청
+          {% else %}
+            {{ mail_provider_label }} Mail 연동 준비됨
+          {% endif %}
+        </h3>
+        <span class="sync-state-badge {% if gmail_sync.connected %}is-live{% elif gmail_sync.has_client_config %}is-ready{% else %}is-off{% endif %}">
+          {% if gmail_sync.connected %}Connected{% elif gmail_sync.has_client_config %}Login Ready{% else %}Setup Required{% endif %}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <div class="gmail-connect-actions">
+    {% if mail_provider == "gmail" %}
+      {% if gmail_sync.has_client_config %}
+        <a class="btn gmail-login-btn" href="/ui/settings/gmail/connect">
+          <span class="material-symbols-outlined">account_circle</span>
+          Google 권한 요청으로 token 생성
+        </a>
+      {% else %}
+        <button class="btn gmail-login-btn" type="button" data-gmail-open-advanced>
+          <span class="material-symbols-outlined">account_circle</span>
+          Google 권한 요청으로 token 생성
+        </button>
+      {% endif %}
+    {% endif %}
+    <button
+      class="btn secondary"
+      type="button"
+      hx-post="/ui/settings/{{ mail_provider }}/sync"
+      hx-target="#gmailSyncSettings"
+      hx-swap="outerHTML"
+      {% if not gmail_sync.has_client_config %}disabled{% endif %}
+    >
+      <span class="material-symbols-outlined">sync</span>
+      {% if mail_provider == "gmail" %}지금 동기화{% else %}{{ mail_provider_label }} Mail 연동 확인{% endif %}
+    </button>
+    {% if mail_provider == "gmail" %}
+      <button
+        class="btn secondary"
+        type="button"
+        hx-post="/ui/settings/gmail/sync-outbound"
+        hx-target="#gmailSyncSettings"
+        hx-swap="outerHTML"
+        {% if not gmail_sync.connected %}disabled{% endif %}
+      >
+        <span class="material-symbols-outlined">outbox</span>
+        회신 추적 동기화
+      </button>
+      <button
+        class="btn danger"
+        type="button"
+        hx-post="/ui/settings/gmail/disconnect"
+        hx-target="#gmailSyncSettings"
+        hx-swap="outerHTML"
+        hx-confirm="연결된 Gmail token을 제거하시겠습니까?"
+        {% if not gmail_sync.can_disconnect %}disabled{% endif %}
+      >
+        <span class="material-symbols-outlined">link_off</span>
+        연결 해제
+      </button>
+    {% endif %}
+  </div>
+
+  <section class="gmail-connect-section">
+    <div class="gmail-connect-section-head">
+      <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+      <strong>요청 권한</strong>
+    </div>
+    <div class="gmail-permission-list">
+      <div class="gmail-permission-item">
+        <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+        <div>
+          <strong>
+            {% if mail_provider == "naver" %}
+              IMAP 읽기 연결
+            {% elif mail_provider == "hiworks" %}
+              POP3 읽기 연결
+            {% else %}
+              Gmail 전체 접근
+            {% endif %}
+          </strong>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="gmail-connect-section">
+    <div class="gmail-connect-section-head">
+      <span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span>
+      <strong>연결 상태</strong>
+    </div>
+    <div class="settings-health-list">
+      <div class="settings-health-row">
+        <span>계정</span>
+        <strong>{{ gmail_sync.email_address or "연결된 " ~ mail_provider_label ~ " Mail 계정 없음" }}</strong>
+      </div>
+      {% if mail_provider == "gmail" %}
+        <div class="settings-health-row">
+          <span>OAuth</span>
+          <strong>
+            {% if gmail_sync.has_client_config %}
+              Client JSON 등록됨{% if gmail_sync.client_config_source in ["env-json", "env-path"] %} · 환경변수{% endif %}
+            {% else %}
+              Client JSON 미등록
+            {% endif %}
+          </strong>
+        </div>
+      {% endif %}
+      <div class="settings-health-row">
+        <span>{% if mail_provider == "gmail" %}Token{% else %}인증{% endif %}</span>
+        <strong>
+          {% if mail_provider == "naver" and gmail_sync.has_client_config %}
+            앱 비밀번호 설정됨
+          {% elif mail_provider == "hiworks" and gmail_sync.has_client_config %}
+            메일 전용 비밀번호 설정됨
+          {% elif gmail_sync.token_source == "env" %}
+            GOOGLE_TOKEN_JSON 사용 중{% if gmail_sync.has_send_token %} · GOOGLE_SEND_TOKEN_JSON 있음{% endif %}
+          {% elif gmail_sync.token_source == "runtime" %}
+            자동 발급 token 사용 중{% if gmail_sync.has_send_token %} · GOOGLE_SEND_TOKEN_JSON 있음{% endif %}
+          {% else %}
+            token 없음
+          {% endif %}
+        </strong>
+      </div>
+      <div class="settings-health-row">
+        <span>동기화</span>
+        <strong>{{ gmail_sync.last_synced_at or "아직 동기화되지 않음" }}</strong>
+      </div>
+      {% if mail_provider == "naver" %}
+        <div class="settings-health-row">
+          <span>IMAP</span>
+          <strong>{{ gmail_sync.imap_host }}:{{ gmail_sync.imap_port }}</strong>
+        </div>
+      {% elif mail_provider == "hiworks" %}
+        <div class="settings-health-row">
+          <span>POP3</span>
+          <strong>{{ gmail_sync.pop3_host }}:{{ gmail_sync.pop3_port }}</strong>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if mail_provider == "gmail" %}
+    <details class="gmail-advanced-setup">
+    <summary>
+      <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+      OAuth client JSON 설정
+    </summary>
+    <div class="gmail-advanced-copy">
+      프로젝트 `.env`의 `GOOGLE_CREDENTIALS_JSON`이 있으면 별도 업로드 없이 Google 권한 요청을 시작할 수 있습니다. 이 값이 없을 때만 OAuth client JSON을 저장하세요.
+    </div>
+    <form
+      class="settings-gmail-form"
+      hx-post="/ui/settings/gmail/client-config"
+      hx-target="#gmailSyncSettings"
+      hx-swap="outerHTML"
+    >
+      <label class="settings-gmail-label" for="gmailClientConfigJson">Google OAuth client JSON</label>
+      <textarea
+        class="input settings-gmail-textarea"
+        id="gmailClientConfigJson"
+        name="client_config_json"
+        rows="5"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder='{"web": {"client_id": "...", "client_secret": "...", "redirect_uris": ["..."]}}'
+      ></textarea>
+      <div class="settings-gmail-actions">
+        <button class="btn secondary" type="submit">
+          <span class="material-symbols-outlined">save</span>
+          OAuth 설정 저장
+        </button>
+      </div>
+    </form>
+    </details>
+
+    <details class="gmail-advanced-setup">
+    <summary>
+      <span class="material-symbols-outlined" aria-hidden="true">key</span>
+      기존 token 수동 등록
+    </summary>
+    <div class="gmail-advanced-copy">
+      자동 권한 요청을 사용할 수 없는 경우에만 기존 `GOOGLE_TOKEN_JSON`을 등록합니다.
+    </div>
+    <form
+      class="settings-gmail-form"
+      hx-post="/ui/settings/gmail/tokens"
+      hx-target="#gmailSyncSettings"
+      hx-swap="outerHTML"
+    >
+      <label class="settings-gmail-label" for="gmailPrimaryTokenJson">GOOGLE_TOKEN_JSON</label>
+      <textarea
+        class="input settings-gmail-textarea"
+        id="gmailPrimaryTokenJson"
+        name="primary_token_json"
+        rows="5"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder='{"token": "...", "refresh_token": "...", "scopes": ["https://mail.google.com/"]}'
+      ></textarea>
+      <label class="settings-gmail-label" for="gmailSendTokenJson">GOOGLE_SEND_TOKEN_JSON</label>
+      <textarea
+        class="input settings-gmail-textarea settings-gmail-textarea--compact"
+        id="gmailSendTokenJson"
+        name="send_token_json"
+        rows="4"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder='{"token": "...", "refresh_token": "...", "scopes": ["https://www.googleapis.com/auth/gmail.send"]}'
+      ></textarea>
+      <div class="settings-gmail-actions">
+        <button class="btn secondary" type="submit">
+          <span class="material-symbols-outlined">save</span>
+          token 저장
+        </button>
+      </div>
+    </form>
+    </details>
+  {% endif %}
+</div>

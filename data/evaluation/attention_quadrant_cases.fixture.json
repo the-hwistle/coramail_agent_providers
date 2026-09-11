@@ -1,0 +1,131 @@
+{
+  "metadata": {
+    "dataset_version": "attention-quadrant-v1",
+    "synthetic": true,
+    "purpose": "Minimal semantic evaluation cases for independent urgency and importance judgment.",
+    "generation_method": "Hand-written Korean business-mail scenarios based on CoRA Mail operating context.",
+    "masking_policy": "No real customer, sender, vessel, or private email data is included.",
+    "known_limits": "These cases validate semantic guardrails only and are not operating performance claims."
+  },
+  "emails": [
+    {
+      "id": "attention-case-urgent-important",
+      "subject": "Main Engine Control Unit 긴급 장애 지원 요청",
+      "body_text": "현재 운항 중인 선박의 Main Engine Control Unit 장애로 운항이 중단된 상태입니다.\n금일 14시 이전까지 기술 지원 및 교체 가능 여부를 회신 부탁드립니다."
+    },
+    {
+      "id": "attention-case-urgent",
+      "subject": "소모품 견적 요청",
+      "body_text": "필터 및 퓨즈 소모품 견적을 금일 중 보내주시기 바랍니다.\n다음 주 내부 구매 검토 예정입니다."
+    },
+    {
+      "id": "attention-case-important",
+      "subject": "신규 선박 프로젝트 장비 공급 기술 검토 요청",
+      "body_text": "다음 달 예정된 신규 선박 프로젝트와 관련하여 주요 제어 장비 공급 가능 여부와 기술 사양을 검토 부탁드립니다.\n예상 발주 규모는 기존 프로젝트보다 큰 수준이며, 이번 주 내 검토 의견을 부탁드립니다."
+    },
+    {
+      "id": "attention-case-normal",
+      "subject": "제품 카탈로그 요청",
+      "body_text": "신규 제품 카탈로그가 있으면 전달 부탁드립니다.\n확인 후 내부적으로 검토하겠습니다."
+    },
+    {
+      "id": "attention-case-bare-urgent-word",
+      "subject": "카탈로그 요청",
+      "body_text": "긴급하게 최신 카탈로그 전달 부탁드립니다."
+    },
+    {
+      "id": "attention-case-small-claim",
+      "subject": "포장 상태 확인 요청",
+      "body_text": "지난 주문에서 포장 박스 한 개가 일부 찌그러져 있었습니다.\n다음 출고 시 확인 부탁드립니다."
+    },
+    {
+      "id": "attention-case-major-customer-simple",
+      "subject": "브로슈어 요청",
+      "body_text": "주요 고객사에서 제품 브로슈어를 다음 주 회의 전까지 요청했습니다."
+    },
+    {
+      "id": "attention-case-resolved-failure",
+      "subject": "장애 보고서 사본 요청",
+      "body_text": "지난달 발생했던 장애 건은 이미 해결되었습니다.\n관련 보고서 사본을 전달 부탁드립니다."
+    },
+    {
+      "id": "attention-case-quoted-history",
+      "subject": "RE: 보고서 사본 요청",
+      "body_text": "관련 보고서 사본 전달 부탁드립니다.\n\nOn Thu, Aug 20, 2026 at 10:00 AM Buyer wrote:\n긴급 장애로 운항 중단 상태입니다. 금일 중 회신 부탁드립니다."
+    }
+  ],
+  "ground_truth": [
+    {
+      "email_message_id": "attention-case-urgent-important",
+      "business_type": "urgent_failure",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "high",
+      "expected_importance": "high",
+      "expected_attention_quadrant": "urgent_important"
+    },
+    {
+      "email_message_id": "attention-case-urgent",
+      "business_type": "quotation_request",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "high",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "urgent"
+    },
+    {
+      "email_message_id": "attention-case-important",
+      "business_type": "specification_review",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "high",
+      "expected_attention_quadrant": "important"
+    },
+    {
+      "email_message_id": "attention-case-normal",
+      "business_type": "general_inquiry",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "normal"
+    },
+    {
+      "email_message_id": "attention-case-bare-urgent-word",
+      "business_type": "general_inquiry",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "normal"
+    },
+    {
+      "email_message_id": "attention-case-small-claim",
+      "business_type": "claim",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "normal"
+    },
+    {
+      "email_message_id": "attention-case-major-customer-simple",
+      "business_type": "general_inquiry",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "normal"
+    },
+    {
+      "email_message_id": "attention-case-resolved-failure",
+      "business_type": "general_inquiry",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "normal"
+    },
+    {
+      "email_message_id": "attention-case-quoted-history",
+      "business_type": "general_inquiry",
+      "expected_assignee_user_id": "not-evaluated",
+      "expected_urgency": "normal",
+      "expected_importance": "normal",
+      "expected_attention_quadrant": "normal"
+    }
+  ]
+}

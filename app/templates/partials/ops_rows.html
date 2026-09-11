@@ -1,0 +1,242 @@
+{% from "macros.html" import category_chip with context %}
+{% macro ops_stage_cell(stage) -%}
+  <span class="ops-stage-pill {{ stage.class }} ops-stage-{{ stage.state }}" title="{{ stage.detail }}">
+    <span class="material-symbols-outlined" aria-hidden="true">{{ stage.icon }}</span>
+  </span>
+{%- endmacro %}
+
+{% macro ops_popover_field(label, value) -%}
+  {% if value %}
+    <div class="ops-popover-field">
+      <span>{{ label }}</span>
+      <strong>{{ value }}</strong>
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro ops_detail_menu(summary, aria_label, meta1_label="", meta1_value="", meta2_label="", meta2_value="", meta3_label="", meta3_value="", title_text="") -%}
+  <details class="ops-detail-menu">
+    <summary title="{{ title_text or summary|striptags }}" aria-label="{{ aria_label }}">{{ summary }}</summary>
+    <div class="ops-detail-popover">
+      {{ ops_popover_field(meta1_label, meta1_value) }}
+      {{ ops_popover_field(meta2_label, meta2_value) }}
+      {{ ops_popover_field(meta3_label, meta3_value) }}
+      {% if not meta1_value and not meta2_value and not meta3_value %}
+        <p class="ops-popover-empty">추가 정보 없음</p>
+      {% endif %}
+    </div>
+  </details>
+{%- endmacro %}
+
+{% macro ops_stage_menu(stage, aria_label, completed_at="", duration="", extra_label="", extra_value="") -%}
+  <details class="ops-detail-menu ops-stage-menu">
+    <summary title="{{ stage.detail }}" aria-label="{{ aria_label }}">{{ ops_stage_cell(stage) }}</summary>
+    <div class="ops-detail-popover ops-detail-popover--with-actions">
+      <div class="ops-detail-content">
+        {{ ops_popover_field("완료 시간", format_mail_detail_time(completed_at)) }}
+        {{ ops_popover_field("소요 시간", duration) }}
+        {{ ops_popover_field(extra_label, extra_value) }}
+        {% if not completed_at and not duration and not extra_value %}
+          <p class="ops-popover-empty">추가 상태 정보 없음</p>
+        {% endif %}
+      </div>
+      {% if caller is defined %}
+        <div class="ops-detail-actions" onclick="event.stopPropagation()">
+          {{ caller() }}
+        </div>
+      {% endif %}
+    </div>
+  </details>
+{%- endmacro %}
+
+{% for row in ops_rows %}
+  <tr class="ops-row {{ row.pipeline_class }}" data-email-uid="{{ row.email_uid }}">
+    <td class="ops-health-cell" data-monitoring-column="health">
+      <div
+        class="ops-health-ring"
+        title="{{ row.pipeline_status.detail|default('미완료', true) }}"
+        aria-label="{{ row.pipeline_status.detail|default('미완료', true) }}"
+        role="img"
+      ></div>
+    </td>
+    <td class="ops-subject-cell" data-monitoring-column="subject">
+      <button
+        class="ops-subject-button"
+        type="button"
+        hx-get="/ui/monitoring/emails/{{ row.email_uid|urlencode }}"
+        hx-target="#opsInspector"
+        hx-swap="innerHTML"
+        title="{{ row.subject }}"
+        aria-label="메일 상세 열기: {{ row.subject }}"
+        data-ops-inspector-open
+      >
+        <strong>{{ row.subject }}</strong>
+      </button>
+    </td>
+    <td class="ops-text-cell" data-monitoring-column="sender">
+      {{ ops_detail_menu(row.sender, "발신자 상세 보기", "이메일", row.sender_address, "메일 UID", row.email_uid) }}
+    </td>
+    <td class="ops-business-cell" data-monitoring-column="business">
+      {{ ops_detail_menu(category_chip(row.business_label), "업무 유형 상세 보기", "분류 완료 시간", format_mail_detail_time(row.classification_completed_at), "분류 소요 시간", row.classification_duration_label, title_text=row.business_label) }}
+    </td>
+    <td class="ops-text-cell" data-monitoring-column="assignee">
+      {{ ops_detail_menu(row.assignee, "담당자 상세 보기", "소속/직책", (row.assignee_department ~ (" · " if row.assignee_department and row.assignee_position else "") ~ row.assignee_position), "이메일", row.assignee_email, "사용자 ID", row.assignee_user_id) }}
+    </td>
+    <td class="ops-time-cell mono" data-monitoring-column="received">
+      {{ ops_detail_menu(format_mail_table_time(row.received_at), "수신일시 상세 보기", "상세 시각", row.received_detail, "메일 UID", row.email_uid) }}
+    </td>
+    <td class="ops-stage-cell ops-attachment-cell" data-monitoring-column="attachment">
+      {% if row.attachments %}
+        <details class="ops-detail-menu ops-attachment-menu">
+          <summary title="{{ row.attachment.detail }}" aria-label="첨부파일 목록 열기">
+            {{ ops_stage_cell(row.attachment) }}
+          </summary>
+          <div class="ops-attachment-popover">
+            <div class="ops-detail-content">
+              {% for file in row.attachments %}
+                <div class="ops-attachment-item">
+                  <span class="material-symbols-outlined" aria-hidden="true">draft</span>
+                  <div>
+                    <strong title="{{ file.filename }}">{{ file.filename }}</strong>
+                    <span>{{ file.document_label }} · {{ file.status }}{% if file.size_label %} · {{ file.size_label }}{% endif %}</span>
+                  </div>
+                  {% if file.view_url %}
+                    <a href="{{ file.view_url }}" target="_blank" rel="noopener" title="보기" aria-label="첨부파일 보기">
+                      <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                    </a>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+            <div class="ops-detail-actions" onclick="event.stopPropagation()">
+              <button
+                class="btn secondary ops-detail-action"
+                type="button"
+                hx-post="/ui/emails/{{ row.email_uid|urlencode }}/attachments/reanalyze"
+                hx-swap="none"
+                title="첨부파일 재분석"
+                aria-label="첨부파일 재분석"
+                data-monitoring-row-action="attachment"
+                {% if row.control_disabled or row.attachment.state == "skipped" %}disabled{% endif %}
+              >
+                <span class="material-symbols-outlined">docs</span>
+                재분석
+              </button>
+            </div>
+          </div>
+        </details>
+      {% else %}
+        {% call ops_stage_menu(row.attachment, "첨부파일 상세 보기", "", "", "첨부 수", row.attachment_count ~ "개") %}
+          <button
+            class="btn secondary ops-detail-action"
+            type="button"
+            hx-post="/ui/emails/{{ row.email_uid|urlencode }}/attachments/reanalyze"
+            hx-swap="none"
+            title="첨부파일 재분석"
+            aria-label="첨부파일 재분석"
+            data-monitoring-row-action="attachment"
+            {% if row.control_disabled or row.attachment.state == "skipped" %}disabled{% endif %}
+          >
+            <span class="material-symbols-outlined">docs</span>
+            재분석
+          </button>
+        {% endcall %}
+      {% endif %}
+    </td>
+    <td class="ops-stage-cell" data-monitoring-column="summary">
+      {% call ops_stage_menu(row.summary, "요약문 상세 보기", row.summary_completed_at, row.summary_duration_label) %}
+        <button
+          class="btn secondary ops-detail-action"
+          type="button"
+          hx-post="/ui/emails/{{ row.email_uid|urlencode }}/summary/regenerate"
+          hx-swap="none"
+          title="요약문 재생성"
+          aria-label="요약문 재생성"
+          data-monitoring-row-action="summary"
+          {% if row.control_disabled %}disabled{% endif %}
+        >
+          <span class="material-symbols-outlined">subject</span>
+          재생성
+        </button>
+      {% endcall %}
+    </td>
+    <td class="ops-stage-cell" data-monitoring-column="classification">
+      {% call ops_stage_menu(row.classification, "분류 상세 보기", row.classification_completed_at, row.classification_duration_label) %}
+        <button
+          class="btn secondary ops-detail-action"
+          type="button"
+          hx-post="/ui/emails/{{ row.email_uid|urlencode }}/classification/regenerate"
+          hx-swap="none"
+          title="메일 유형 재분류"
+          aria-label="메일 유형 재분류"
+          data-monitoring-row-action="classification"
+          {% if row.control_disabled %}disabled{% endif %}
+        >
+          <span class="material-symbols-outlined">label</span>
+          재분류
+        </button>
+      {% endcall %}
+    </td>
+    <td class="ops-stage-cell" data-monitoring-column="decision">
+      {% call ops_stage_menu(row.decision, "Mail Decision 상세 보기", row.mail_decision_completed_at, row.mail_decision_duration_label, "시작 시간", format_mail_detail_time(row.mail_decision_started_at)) %}
+        <button
+          class="btn secondary ops-detail-action"
+          type="button"
+          hx-post="/ui/emails/{{ row.email_uid|urlencode }}/mail-decision-runs"
+          hx-target="closest tr"
+          hx-swap="none"
+          title="Mail Decision 실행"
+          aria-label="Mail Decision 실행"
+          data-monitoring-row-action="decision"
+          {% if row.control_disabled %}disabled{% endif %}
+        >
+          <span class="material-symbols-outlined">subject</span>
+          실행
+        </button>
+      {% endcall %}
+    </td>
+    <td class="ops-stage-cell" data-monitoring-column="routing">
+      {% call ops_stage_menu(row.routing, "라우팅 상세 보기", row.routing_fixed_at or row.routing_assigned_at or row.routing_completed_at, "", "전달 기록 시간", format_mail_detail_time(row.routing_forwarded_at)) %}
+        <button
+          class="btn secondary ops-detail-action"
+          type="button"
+          hx-post="/ui/emails/{{ row.email_uid|urlencode }}/routing/confirm-top-candidate"
+          hx-swap="none"
+          title="1순위 담당자 후보로 검토 확정"
+          aria-label="1순위 담당자 후보로 검토 확정"
+          data-monitoring-row-action="review-confirm"
+          hx-confirm="이 메일을 1순위 담당자 후보로 확정하시겠습니까?"
+          {% if row.control_disabled or not row.can_confirm_review_candidate %}disabled{% endif %}
+        >
+          <span class="material-symbols-outlined">how_to_reg</span>
+          확정
+        </button>
+      {% endcall %}
+    </td>
+    <td class="ops-stage-cell" data-monitoring-column="forwarding">
+      {% call ops_stage_menu(row.forwarding, "전달 상세 보기", row.manual_route_sent_at or row.routing_forwarded_at, "", "오류 메시지", row.manual_route_error) %}
+        <button
+          class="btn secondary ops-detail-action"
+          type="button"
+          hx-post="/ui/emails/{{ row.email_uid|urlencode }}/route-manual"
+          hx-swap="none"
+          title="담당자 수동 전달"
+          aria-label="담당자 수동 전달"
+          data-manual-route-button
+          data-manual-route-status="{{ row.forwarding.state }}"
+          data-email-uid="{{ row.email_uid }}"
+          data-monitoring-row-action="forwarding"
+          hx-confirm="이 메일을 현재 담당자에게 수동 라우팅하시겠습니까?"
+          {% if row.control_disabled or row.forwarding.state == "completed" or row.routing.state == "not_started" %}disabled{% endif %}
+        >
+          <span class="material-symbols-outlined">forward_to_inbox</span>
+          전달
+        </button>
+      {% endcall %}
+    </td>
+  </tr>
+{% else %}
+  <tr>
+    <td colspan="12" class="empty-cell">표시할 운영 상태가 없습니다.</td>
+  </tr>
+{% endfor %}

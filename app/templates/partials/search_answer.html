@@ -1,0 +1,7 @@
+{% if error %}
+  <div class="notice danger">{{ error }}</div>
+{% else %}
+  <div class="search-answer-state">
+    {{ answer or "답변 없음" }}
+  </div>
+{% endif %}

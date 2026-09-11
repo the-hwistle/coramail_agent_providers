@@ -1,0 +1,52 @@
+{% from "macros.html" import category_chip, info_tooltip with context %}
+<section class="view page-view settings-view" data-view="settings">
+  <section class="settings-content-grid settings-content-grid--single">
+    {# Temporarily hidden by request. Restore this section to show auto assignment policy settings again. #}
+
+    {% if demo_duplicate_mail_enabled %}
+    <section class="panel settings-system-panel settings-demo-tools-panel">
+      <div class="panel-head">
+        <div class="panel-title-row">
+          <h2>데모 메일 수신</h2>
+          {{ info_tooltip("최신 원본 데모 메일의 제목, 본문, 첨부만 새 수신건으로 복제합니다.", "데모 메일 수신 설명") }}
+        </div>
+        <span class="label">Temporary</span>
+      </div>
+      <div class="panel-body settings-demo-tools-body">
+        <form method="post" action="/ui/settings/demo/receive-latest-duplicate" class="settings-demo-receive-form">
+          <button class="button primary settings-demo-receive-btn" type="submit">
+            <span class="material-symbols-outlined" aria-hidden="true">mark_email_unread</span>
+            최신 메일 다시 수신
+          </button>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="panel settings-system-panel settings-rules-panel">
+      <div class="panel-head">
+        <div class="panel-title-row">
+          <h2>담당자 우선순위 배정</h2>
+          {{ info_tooltip("담당자 칩을 끌어 순서를 바꾸고 상태 점을 눌러 활성 여부를 전환합니다.", "레이블 배정 설명") }}
+        </div>
+        <span class="label">Active Assignment Rules</span>
+      </div>
+      <div class="panel-body settings-rules-body">
+        {% include "partials/routing_summary.html" %}
+      </div>
+    </section>
+
+    <section class="panel settings-system-panel settings-routing-panel">
+      <div class="panel-head">
+        <div class="panel-title-row">
+          <h2>담당자 관리</h2>
+          {{ info_tooltip("운영 담당자는 편집할 수 있습니다. 합성 담당자는 평가 검증용 읽기 전용 데이터이며 Gmail 배정 후보에서는 제외됩니다.", "담당자 관리 설명") }}
+        </div>
+        <span class="label">전체 {{ assignees | length }}</span>
+      </div>
+      <div class="panel-body settings-rules-body">
+        {% include "partials/routing_table.html" %}
+      </div>
+    </section>
+  </section>
+</section>

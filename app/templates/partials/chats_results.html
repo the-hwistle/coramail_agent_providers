@@ -1,0 +1,119 @@
+{% set chat_turns = turns|default([]) %}
+{% if not chat_turns %}
+  <div class="chat-empty">
+    <div class="chat-message-group chat-message-group-assistant">
+      <div class="chat-message chat-message-assistant">
+        <div class="chat-avatar" aria-hidden="true">AI</div>
+        <div class="chat-bubble chat-welcome-bubble">
+          <strong>무엇을 확인할까요?</strong>
+          <p>메일함과 첨부 문서에서 확인할 내용을 질문해 주세요.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="chat-conversation">
+    {% for turn in chat_turns %}
+      {% set turn_result = turn.result if turn.result is defined else none %}
+      {% set turn_error = turn.error if turn.error is defined else "" %}
+      {% set evidence_policy = turn.evidence_policy if turn.evidence_policy is defined else "required" %}
+      {% set evidence_items = turn_result.results if turn_result and turn_result.results is defined else [] %}
+      <div class="chat-message chat-message-user">
+        <div class="chat-bubble">{{ turn.query }}</div>
+      </div>
+
+      <div class="chat-message-group chat-message-group-assistant">
+        <div class="chat-message chat-message-assistant">
+          <div class="chat-avatar" aria-hidden="true">AI</div>
+          <div class="chat-bubble {% if turn_error %}chat-error-bubble{% else %}chat-answer-bubble prose{% endif %}">
+            {% if turn_error %}
+              <strong>{{ turn_error }}</strong>
+            {% elif turn_result %}
+              {% set result = turn_result %}
+              {% set answer = turn.answer %}
+              {% include "partials/search_answer.html" %}
+            {% else %}
+              <p>{{ turn.answer }}</p>
+            {% endif %}
+            {% if turn.query %}
+              <div class="chat-bubble-actions">
+                <button
+                  class="chat-retry-button"
+                  type="button"
+                  hx-get="/ui/chats-results"
+                  hx-target="#chat-results-body"
+                  hx-swap="innerHTML"
+                  hx-indicator="#chat-results"
+                  hx-include="#chatSessionInput,#chatHistoryInput"
+                  hx-vals='{"q": {{ turn.query | tojson }}}'
+                  data-chat-retry-query="{{ turn.query }}"
+                  aria-label="같은 질문 다시 요청"
+                  title="같은 질문 다시 요청"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                  <span>재요청</span>
+                </button>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if turn_result and (evidence_items or evidence_policy == "required") %}
+          <section class="chat-evidence-panel{% if not evidence_items %} chat-evidence-panel-empty{% endif %}" aria-label="답변 근거">
+            <div class="chat-evidence-head">
+              <strong>{{ "근거 부족" if not evidence_items else "근거" }}</strong>
+              <span class="label">{{ evidence_items | length }}개</span>
+            </div>
+            <div class="chat-evidence-list">
+              {% for item in evidence_items or [] %}
+                {% set source_label = item.source or "" %}
+                <article class="chat-evidence-card">
+                  <span class="chat-evidence-rank">{{ loop.index }}</span>
+                  <div class="chat-evidence-body">
+                    <div class="chat-evidence-title">
+                      <div class="chat-evidence-source">
+                        <span class="status-badge {% if item.payload.filename or item.payload.stored_name %}status-violet{% else %}status-indigo{% endif %}">
+                          {{ "Attachment" if item.payload.filename or item.payload.stored_name else "Mail Body" }}
+                        </span>
+                        {% if source_label and source_label | lower != "unknown" %}
+                          <strong>{{ source_label }}</strong>
+                        {% endif %}
+                      </div>
+                      {% if item.email_uid %}
+                        <button
+                          class="btn secondary result-detail-button"
+                          type="button"
+                          hx-get="/ui/chats/emails/{{ item.email_uid | urlencode }}"
+                          hx-target="#chatEmailDetailDrawer"
+                          hx-swap="innerHTML"
+                          data-chat-email-drawer-open
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                          <span>원본 메일 보기</span>
+                        </button>
+                      {% elif item.detail_url %}
+                        <a class="btn secondary result-detail-button" href="{{ item.detail_url }}">
+                          <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                          <span>원본 메일 보기</span>
+                        </a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </article>
+              {% else %}
+                <div class="chat-empty-evidence">
+                  <span class="material-symbols-outlined">search_off</span>
+                  <strong>이 답변에 사용할 메일·첨부 근거를 찾지 못했습니다.</strong>
+                </div>
+              {% endfor %}
+            </div>
+          </section>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% if include_session_oob|default(false) %}
+  <input id="chatSessionInput" type="hidden" name="session_id" value="{{ session_id }}" hx-swap-oob="true">
+  <input id="chatHistoryInput" type="hidden" name="chat_history" value='{{ compact_turns|default([])|tojson }}' hx-swap-oob="true">
+{% endif %}

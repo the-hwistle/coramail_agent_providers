@@ -1,0 +1,460 @@
+{
+  "fixture_version": 1,
+  "name": "mail_list_samples",
+  "description": "Synthetic demo-only mailbox rows used to make Dashboard and Inbox list views look populated during external demos.",
+  "source": {
+    "origin": "Synthetic demo-only dataset",
+    "received_from": "demo-sales@dawonict.co.kr demo mailbox context",
+    "provided_at": "2026-08-13",
+    "generation_method": "Newly authored synthetic list-display emails; no operating mailbox, customer, employee, project, vessel, or attachment data was reused.",
+    "masking_policy": "All senders, domains, companies, subjects, references, items, and message bodies are fictional. Dawon and demo-sales@dawonict.co.kr are used only as the demo inbox identity.",
+    "known_gap": "These rows are for list and dashboard display. Only the received quotation fixture contains a demo attachment for detail inspection."
+  },
+  "id_policy": {
+    "type": "uuid_v5",
+    "namespace": "11111111-2222-3333-4444-555555555555",
+    "note": "IDs are stable fixture IDs for repeatable local seeds and tests."
+  },
+  "email_account": {
+    "id": "d458767b-8ed4-581c-a0b7-c96bfa5bd7a1",
+    "provider": "synthetic",
+    "email_address": "demo-sales@dawonict.co.kr",
+    "display_name": "Dawon Demo Inbox",
+    "status": "active",
+    "timezone": "Asia/Seoul"
+  },
+  "messages": [
+    {
+      "id": "9eae30c5-8879-52aa-bc2b-2e5936bc862d",
+      "provider_message_id": "demo-list-001",
+      "provider_thread_id": "thread-demo-list-001",
+      "rfc_message_id": "<demo-list-001@coramail.local>",
+      "sender_name": "김하린",
+      "sender_address": "harin@neofactory.example",
+      "subject": "[발주서 접수] PLC 제어반 예비품 발주 요청",
+      "subject_normalized": "[발주서 접수] PLC 제어반 예비품 발주 요청",
+      "body_text": "안녕하세요. 네오팩토리솔루션 김하린입니다.\n\n발주서 기준 납기 가능일과 재고 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n김하린\n네오팩토리솔루션",
+      "snippet": "발주서 기준 납기 가능일과 재고 확인 요청.",
+      "sent_at": "2026-08-12T09:10:00+09:00",
+      "received_at": "2026-08-12T09:10:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "5c15205b-0548-5227-8646-260bae36eddf",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "purchase_order",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "sales",
+        "business_refs": ["PO-DEMO-2026-0812-01"],
+        "vessel_names": [],
+        "equipment": ["PLC Control Panel", "I/O Module"],
+        "key_spec_fields": {
+          "requested_action": "발주서 기준 납기 가능일과 재고 확인 요청."
+        },
+        "counterparty": "네오팩토리솔루션"
+      }
+    },
+    {
+      "id": "f187a3fe-f804-5016-8799-f0a9ca2c8bcc",
+      "provider_message_id": "demo-list-002",
+      "provider_thread_id": "thread-demo-list-002",
+      "rfc_message_id": "<demo-list-002@coramail.local>",
+      "sender_name": "이도현",
+      "sender_address": "dohyun@saerom-tech.example",
+      "subject": "[납기 확인] 센서 모듈 출고 예정일 문의",
+      "subject_normalized": "[납기 확인] 센서 모듈 출고 예정일 문의",
+      "body_text": "안녕하세요. 새롬테크 이도현입니다.\n\n센서 모듈 출고 예정일과 부분 납품 가능 여부 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n이도현\n새롬테크",
+      "snippet": "센서 모듈 출고 예정일과 부분 납품 가능 여부 확인 요청.",
+      "sent_at": "2026-08-12T08:52:00+09:00",
+      "received_at": "2026-08-12T08:52:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "c9a0506b-a69d-5359-ad00-23e57bb023e8",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "delivery_confirmation",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "logistics",
+        "business_refs": ["DL-DEMO-2026-0812-02"],
+        "vessel_names": [],
+        "equipment": ["Pressure Sensor Module"],
+        "key_spec_fields": {
+          "requested_action": "센서 모듈 출고 예정일과 부분 납품 가능 여부 확인 요청."
+        },
+        "counterparty": "새롬테크"
+      }
+    },
+    {
+      "id": "66eb838a-af98-52ce-9d32-ab06d15749dd",
+      "provider_message_id": "demo-list-003",
+      "provider_thread_id": "thread-demo-list-003",
+      "rfc_message_id": "<demo-list-003@coramail.local>",
+      "sender_name": "정서윤",
+      "sender_address": "seoyun@onue-system.example",
+      "subject": "[기술 문의] 통신 게이트웨이 Modbus 설정값 확인",
+      "subject_normalized": "[기술 문의] 통신 게이트웨이 Modbus 설정값 확인",
+      "body_text": "안녕하세요. 온유시스템 정서윤입니다.\n\nModbus 통신 설정값과 현장 적용 가능 여부 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n정서윤\n온유시스템",
+      "snippet": "Modbus 통신 설정값과 현장 적용 가능 여부 확인 요청.",
+      "sent_at": "2026-08-12T08:31:00+09:00",
+      "received_at": "2026-08-12T08:31:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "37d9a9b9-d6d9-592c-936f-952f58c708df",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "technical_inquiry",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "technical",
+        "business_refs": ["TECH-DEMO-2026-0812-01"],
+        "vessel_names": [],
+        "equipment": ["Industrial Gateway"],
+        "key_spec_fields": {
+          "requested_action": "Modbus 통신 설정값과 현장 적용 가능 여부 확인 요청."
+        },
+        "counterparty": "온유시스템"
+      }
+    },
+    {
+      "id": "ecf77ed3-2e89-556f-8372-95ed77e86b5b",
+      "provider_message_id": "demo-list-004",
+      "provider_thread_id": "thread-demo-list-004",
+      "rfc_message_id": "<demo-list-004@coramail.local>",
+      "sender_name": "오민재",
+      "sender_address": "minjae@haemil-eng.example",
+      "subject": "[서비스 요청] 현장 전원모듈 점검 일정 협의",
+      "subject_normalized": "[서비스 요청] 현장 전원모듈 점검 일정 협의",
+      "body_text": "안녕하세요. 해밀엔지니어링 오민재입니다.\n\n전원모듈 점검 가능 일정과 방문 전 준비사항 회신 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n오민재\n해밀엔지니어링",
+      "snippet": "전원모듈 점검 가능 일정과 방문 전 준비사항 회신 요청.",
+      "sent_at": "2026-08-11T17:46:00+09:00",
+      "received_at": "2026-08-11T17:46:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "3b1a79d9-114a-54c1-a11b-45968a6e6b83",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "service_request",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "service",
+        "business_refs": ["SR-DEMO-2026-0811-04"],
+        "vessel_names": [],
+        "equipment": ["DC Power Supply Module"],
+        "key_spec_fields": {
+          "requested_action": "전원모듈 점검 가능 일정과 방문 전 준비사항 회신 요청."
+        },
+        "counterparty": "해밀엔지니어링"
+      }
+    },
+    {
+      "id": "7517eb7f-485a-5525-bcd3-c46f42f7df32",
+      "provider_message_id": "demo-list-005",
+      "provider_thread_id": "thread-demo-list-005",
+      "rfc_message_id": "<demo-list-005@coramail.local>",
+      "sender_name": "한지우",
+      "sender_address": "jiwoo@raon-auto.example",
+      "subject": "[견적 요청] 산업용 스위치 추가 수량 견적 문의",
+      "subject_normalized": "[견적 요청] 산업용 스위치 추가 수량 견적 문의",
+      "body_text": "안녕하세요. 라온오토메이션 한지우입니다.\n\n산업용 스위치 추가 수량의 견적과 납기 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n한지우\n라온오토메이션",
+      "snippet": "산업용 스위치 추가 수량의 견적과 납기 확인 요청.",
+      "sent_at": "2026-08-11T16:22:00+09:00",
+      "received_at": "2026-08-11T16:22:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "1fc0a5d5-af7b-513e-8432-a9b08030a079",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "quotation_request",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "sales",
+        "business_refs": ["RFQ-DEMO-2026-0811-05"],
+        "vessel_names": [],
+        "equipment": ["Industrial Ethernet Switch"],
+        "key_spec_fields": {
+          "requested_action": "산업용 스위치 추가 수량의 견적과 납기 확인 요청."
+        },
+        "counterparty": "라온오토메이션"
+      }
+    },
+    {
+      "id": "9cc69d82-9368-509f-92d3-278b9c6120bd",
+      "provider_message_id": "demo-list-006",
+      "provider_thread_id": "thread-demo-list-006",
+      "rfc_message_id": "<demo-list-006@coramail.local>",
+      "sender_name": "문태오",
+      "sender_address": "taeo@seum-power.example",
+      "subject": "[클레임 접수] 전원 공급 장치 초기 불량 확인 요청",
+      "subject_normalized": "[클레임 접수] 전원 공급 장치 초기 불량 확인 요청",
+      "body_text": "안녕하세요. 세움파워 문태오입니다.\n\n초기 불량 의심 전원 공급 장치의 교환 가능 여부 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n문태오\n세움파워",
+      "snippet": "초기 불량 의심 전원 공급 장치의 교환 가능 여부 확인 요청.",
+      "sent_at": "2026-08-10T14:05:00+09:00",
+      "received_at": "2026-08-10T14:05:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "1a041e9c-f74e-5735-8e34-9a40865dca74",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "claim",
+        "document_category": "",
+        "priority": "high",
+        "assignee_area": "service",
+        "business_refs": ["CL-DEMO-2026-0811-01"],
+        "vessel_names": [],
+        "equipment": ["Power Supply Unit"],
+        "key_spec_fields": {
+          "requested_action": "초기 불량 의심 전원 공급 장치의 교환 가능 여부 확인 요청."
+        },
+        "counterparty": "세움파워"
+      }
+    },
+    {
+      "id": "f26e82bf-6e34-5a47-94c8-b868195018ce",
+      "provider_message_id": "demo-list-007",
+      "provider_thread_id": "thread-demo-list-007",
+      "rfc_message_id": "<demo-list-007@coramail.local>",
+      "sender_name": "배수아",
+      "sender_address": "sua@union-measure.example",
+      "subject": "[도면 검토] 단자대 배선도 승인 요청",
+      "subject_normalized": "[도면 검토] 단자대 배선도 승인 요청",
+      "body_text": "안녕하세요. 유니온계측 배수아입니다.\n\n단자대 배선도 검토 후 승인 또는 수정 의견 회신 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n배수아\n유니온계측",
+      "snippet": "단자대 배선도 검토 후 승인 또는 수정 의견 회신 요청.",
+      "sent_at": "2026-08-09T11:18:00+09:00",
+      "received_at": "2026-08-09T11:18:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "1a62fe5b-5b7e-58a4-a9cc-69633332f3b8",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "drawing_review",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "technical",
+        "business_refs": ["DWG-DEMO-2026-0811-02"],
+        "vessel_names": [],
+        "equipment": ["Terminal Block"],
+        "key_spec_fields": {
+          "requested_action": "단자대 배선도 검토 후 승인 또는 수정 의견 회신 요청."
+        },
+        "counterparty": "유니온계측"
+      }
+    },
+    {
+      "id": "40979eaf-8c84-5df9-94e6-41f645c0c705",
+      "provider_message_id": "demo-list-008",
+      "provider_thread_id": "thread-demo-list-008",
+      "rfc_message_id": "<demo-list-008@coramail.local>",
+      "sender_name": "서강준",
+      "sender_address": "kangjun@acro-tech.example",
+      "subject": "[결제 문의] 세금계산서 발행 정보 확인",
+      "subject_normalized": "[결제 문의] 세금계산서 발행 정보 확인",
+      "body_text": "안녕하세요. 아크로테크 서강준입니다.\n\n세금계산서 발행 정보와 입금 예정일 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n서강준\n아크로테크",
+      "snippet": "세금계산서 발행 정보와 입금 예정일 확인 요청.",
+      "sent_at": "2026-08-08T16:03:00+09:00",
+      "received_at": "2026-08-08T16:03:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "1cc115ae-05a3-5711-819c-2a3a4d949ce2",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "payment_inquiry",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "admin",
+        "business_refs": ["PAY-DEMO-2026-0811-03"],
+        "vessel_names": [],
+        "equipment": [],
+        "key_spec_fields": {
+          "requested_action": "세금계산서 발행 정보와 입금 예정일 확인 요청."
+        },
+        "counterparty": "아크로테크"
+      }
+    },
+    {
+      "id": "919b6f62-c0aa-5f41-b58d-397397ef8a97",
+      "provider_message_id": "demo-list-009",
+      "provider_thread_id": "thread-demo-list-009",
+      "rfc_message_id": "<demo-list-009@coramail.local>",
+      "sender_name": "유나연",
+      "sender_address": "nayeon@ieum-industry.example",
+      "subject": "[긴급 장애] 현장 네트워크 장비 통신 불안정",
+      "subject_normalized": "[긴급 장애] 현장 네트워크 장비 통신 불안정",
+      "body_text": "안녕하세요. 이음산업 유나연입니다.\n\n현장 네트워크 장비 통신 불안정으로 긴급 점검 가능 여부 문의.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n유나연\n이음산업",
+      "snippet": "현장 네트워크 장비 통신 불안정으로 긴급 점검 가능 여부 문의.",
+      "sent_at": "2026-08-08T10:37:00+09:00",
+      "received_at": "2026-08-08T10:37:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "1434c226-1941-51be-9b48-4f190df9392f",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "urgent_failure",
+        "document_category": "",
+        "priority": "high",
+        "urgency": "high",
+        "importance": "high",
+        "attention_quadrant": "urgent_important",
+        "assignee_area": "urgent_service",
+        "business_refs": ["URG-DEMO-2026-0810-01"],
+        "vessel_names": [],
+        "equipment": ["Network Switch"],
+        "key_spec_fields": {
+          "requested_action": "현장 네트워크 장비 통신 불안정으로 긴급 점검 가능 여부 문의."
+        },
+        "counterparty": "이음산업"
+      }
+    },
+    {
+      "id": "b6123b49-3c25-546a-b298-3281afbdbb97",
+      "provider_message_id": "demo-list-010",
+      "provider_thread_id": "thread-demo-list-010",
+      "rfc_message_id": "<demo-list-010@coramail.local>",
+      "sender_name": "조현우",
+      "sender_address": "hyunwoo@bridge-factory.example",
+      "subject": "[인증서 요청] 납품 예정 장비 성적서 발행 요청",
+      "subject_normalized": "[인증서 요청] 납품 예정 장비 성적서 발행 요청",
+      "body_text": "안녕하세요. 브릿지팩토리 조현우입니다.\n\n납품 예정 장비의 시험성적서와 인증서 발행 가능 일정 확인 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n조현우\n브릿지팩토리",
+      "snippet": "납품 예정 장비의 시험성적서와 인증서 발행 가능 일정 확인 요청.",
+      "sent_at": "2026-08-07T15:44:00+09:00",
+      "received_at": "2026-08-07T15:44:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "45caefa4-4871-52c3-b581-32e5da4acba5",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "certificate_request",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "admin",
+        "business_refs": ["CERT-DEMO-2026-0810-02"],
+        "vessel_names": [],
+        "equipment": ["Power Module"],
+        "key_spec_fields": {
+          "requested_action": "납품 예정 장비의 시험성적서와 인증서 발행 가능 일정 확인 요청."
+        },
+        "counterparty": "브릿지팩토리"
+      }
+    },
+    {
+      "id": "08a679e5-d11a-532c-b13b-ebf43c6e4a4c",
+      "provider_message_id": "demo-list-011",
+      "provider_thread_id": "thread-demo-list-011",
+      "rfc_message_id": "<demo-list-011@coramail.local>",
+      "sender_name": "강리나",
+      "sender_address": "rina@pointlab.example",
+      "subject": "[호환성 확인] 기존 제어반과 신규 모듈 연결 검토",
+      "subject_normalized": "[호환성 확인] 기존 제어반과 신규 모듈 연결 검토",
+      "body_text": "안녕하세요. 포인트랩 강리나입니다.\n\n기존 제어반과 신규 모듈의 전기적 호환성 검토 요청.\n\n확인 후 회신 부탁드립니다.\n\n감사합니다.\n강리나\n포인트랩",
+      "snippet": "기존 제어반과 신규 모듈의 전기적 호환성 검토 요청.",
+      "sent_at": "2026-08-06T13:26:00+09:00",
+      "received_at": "2026-08-06T13:26:00+09:00",
+      "has_attachment": false,
+      "attachment_count": 0,
+      "processing_status": "received",
+      "recipients": [
+        {
+          "id": "9fbbff79-5be0-5051-bb4d-c8af5326ab10",
+          "recipient_type": "to",
+          "name": "다원",
+          "address": "demo-sales@dawonict.co.kr"
+        }
+      ],
+      "attachments": [],
+      "expected_demo_labels": {
+        "mail_category": "compatibility_check",
+        "document_category": "",
+        "priority": "normal",
+        "assignee_area": "technical_sales",
+        "business_refs": ["COMP-DEMO-2026-0810-03"],
+        "vessel_names": [],
+        "equipment": ["Control Module"],
+        "key_spec_fields": {
+          "requested_action": "기존 제어반과 신규 모듈의 전기적 호환성 검토 요청."
+        },
+        "counterparty": "포인트랩"
+      }
+    }
+  ]
+}

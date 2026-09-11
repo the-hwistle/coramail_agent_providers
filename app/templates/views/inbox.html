@@ -1,0 +1,130 @@
+{% from "macros.html" import info_tooltip with context %}
+<section class="view page-view inbox-view" data-view="inbox">
+  {% set status_options = work_status_filter_options or [
+    {"value": "assigned", "label": "미확인"},
+    {"value": "acknowledged", "label": "확인함"},
+    {"value": "in_progress", "label": "진행중"},
+    {"value": "responded", "label": "회신함"},
+    {"value": "completed", "label": "완료"}
+  ] %}
+  <div class="inbox-toolbar" aria-label="Inbox 검색과 카테고리 필터">
+    <div class="filter-row inbox-filter-row">
+      <label class="sr-only" for="mailSearch">메일 검색</label>
+      <input
+        class="input"
+        id="mailSearch"
+        name="q"
+        placeholder="Search sender, subject, body"
+        value="{{ query or '' }}"
+        hx-post="/ui/mail-rows"
+        hx-trigger="keyup changed delay:400ms"
+        hx-target="#mailRows"
+        hx-include="#categoryFilter,#workStatusFilter,#selectedEmailIndex,#selectedEmailUid"
+      >
+      <label class="sr-only" for="categoryFilter">업무 유형 필터</label>
+      <input type="hidden" id="categoryFilter" name="category" value="{{ selected_category or '' }}">
+      <details
+        class="dashboard-category-select-field inbox-category-select-field"
+        data-category-filter-select
+        data-category-filter-target="inbox"
+      >
+        <summary class="dashboard-category-select" aria-label="업무 유형 필터">
+          <span data-category-filter-selected-label>{{ selected_category or "업무 유형 전체" }}</span>
+        </summary>
+        <div class="dashboard-category-select-menu" role="listbox" aria-label="업무 유형 필터 옵션">
+          <button
+            type="button"
+            class="dashboard-category-select-option{% if not selected_category %} is-active{% endif %}"
+            data-category-filter="__all__"
+            role="option"
+            aria-selected="{{ 'true' if not selected_category else 'false' }}"
+          >업무 유형 전체</button>
+        {% for category in category_order %}
+          <button
+            type="button"
+            class="dashboard-category-select-option{% if selected_category == category %} is-active{% endif %}"
+            data-category-filter="{{ category }}"
+            role="option"
+            aria-selected="{{ 'true' if selected_category == category else 'false' }}"
+          >{{ category }}</button>
+        {% endfor %}
+        </div>
+      </details>
+      <div class="mail-status-filter-row">
+        <label class="sr-only" for="workStatusFilter">진행 상태 필터</label>
+        <input type="hidden" id="workStatusFilter" name="status" value="{{ selected_work_status or '' }}">
+        <div class="mail-status-filter" aria-label="진행 상태 필터">
+          <span class="mail-status-filter-highlight" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="mail-status-filter-btn{% if not selected_work_status %} is-active{% endif %}"
+            data-mail-status-filter=""
+            data-mail-status-target="inbox"
+            aria-pressed="{{ 'true' if not selected_work_status else 'false' }}"
+          >전체</button>
+          {% for option in status_options %}
+            <button
+              type="button"
+              class="mail-status-filter-btn{% if selected_work_status == option['value'] %} is-active{% endif %}"
+              data-mail-status-filter="{{ option['value'] }}"
+              data-mail-status-target="inbox"
+              aria-pressed="{{ 'true' if selected_work_status == option['value'] else 'false' }}"
+            >{{ option.label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="inbox-layout">
+    <input type="hidden" id="selectedEmailIndex" name="selected_email_index" value="{{ selected_email_index if selected_email_index is not none else '' }}">
+    <input type="hidden" id="selectedEmailUid" name="selected_email_uid" value="{{ selected_email_uid or '' }}">
+    <section class="panel inbox-summary-panel">
+      <div class="table-wrap inbox-list inbox-table-wrap">
+        <table>
+          <colgroup>
+            <col class="mail-read-state-col">
+            <col class="inbox-status-col">
+            <col class="inbox-sender-col">
+            <col class="inbox-subject-col">
+            <col class="inbox-classification-col">
+            <col class="inbox-routing-col">
+            <col class="inbox-time-col">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="mail-read-state-col" aria-label="읽음 상태"></th>
+              <th class="inbox-status-col">상태</th>
+              <th class="inbox-sender-col">발신자</th>
+              <th class="subject-col inbox-subject-col">제목</th>
+              <th class="inbox-classification-col">업무 유형</th>
+              <th class="inbox-routing-col">담당자</th>
+              <th class="inbox-time-col">수신일시</th>
+            </tr>
+          </thead>
+          <tbody
+            id="mailRows"
+            hx-post="/ui/mail-rows"
+            hx-trigger="load"
+            hx-include="#mailSearch,#categoryFilter,#workStatusFilter,#selectedEmailIndex,#selectedEmailUid"
+            hx-swap="innerHTML"
+          >
+            {% include "partials/mail_rows.html" %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      id="email-detail"
+      class="inbox-detail-panel"
+      {% if initial_email_detail_url %}
+        hx-post="{{ initial_email_detail_url }}"
+        hx-trigger="load"
+        hx-swap="innerHTML"
+      {% endif %}
+    >
+      {% include "partials/email_detail.html" %}
+    </section>
+  </div>
+</section>

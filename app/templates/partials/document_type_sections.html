@@ -1,0 +1,79 @@
+{% from "macros.html" import category_chip with context %}
+<div class="document-type-card-grid">
+  {% for section in document_type_sections %}
+    <section class="document-type-card" data-document-type="{{ section.document_type }}">
+      <div class="document-type-card-head">
+        <div class="document-type-card-title">
+          <span class="document-type-icon material-symbols-outlined" data-document-type-icon aria-hidden="true">
+            {% if section.document_type == "rfq" %}request_quote{% elif section.document_type == "quote" %}price_check{% elif section.document_type == "purchase_order" %}receipt_long{% else %}description{% endif %}
+          </span>
+          <h2>{{ section.label }}</h2>
+        </div>
+        <details class="document-type-icon-picker">
+          <summary aria-label="{{ section.label }} 아이콘 변경">
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+          </summary>
+          <div class="document-type-icon-menu" role="group" aria-label="{{ section.label }} 아이콘 옵션">
+            {% for icon in ["request_quote", "price_check", "receipt_long", "payments", "article", "description", "inventory_2", "fact_check", "contract", "assignment"] %}
+              <button
+                type="button"
+                class="document-type-icon-option material-symbols-outlined"
+                data-document-type="{{ section.document_type }}"
+                data-document-icon="{{ icon }}"
+                title="{{ icon }}"
+                aria-label="{{ icon }}"
+              >{{ icon }}</button>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+      <div class="document-type-mail-preview-list">
+        {% for email in section.emails %}
+          {% set classification = email.classification or {} %}
+          {% set label = email.mail_category or mail_category(classification) %}
+          {% set state = email.work_status or email.classification_state or "unclassified" %}
+          {% set routing_text = receiver_display_text(email.routing_display or classification.routing_display or route_label(classification.routing_labels or [])) %}
+          <article
+            class="document-type-mail"
+            hx-post="/ui/inbox?email_uid={{ email.email_uid | urlencode }}"
+            hx-target="#main-panel"
+            hx-swap="innerHTML"
+          >
+            <div class="document-type-mail-main">
+              <div class="document-type-mail-meta">
+                <span class="row-status {{ state }}">
+                  <span class="material-symbols-outlined">
+                    {% if state == "completed" %}auto_awesome{% elif state == "forwarded" %}forward_to_inbox{% elif state == "acknowledged" %}drafts{% elif state == "auto_assigned" or state == "assigned" %}assignment_turned_in{% elif state == "review_required" %}rate_review{% elif state == "running" or state == "cancelling" %}progress_activity{% elif state == "queued" %}schedule{% elif state == "failed" %}error{% elif state == "cancelled" %}delete{% else %}pending{% endif %}
+                  </span>
+                  {{ email.work_status_label or email.classification_state_label or state }}
+                </span>
+                <span class="mono document-type-mail-time">{{ format_mail_table_time(email.date or email.received_at or email.created_at) }}</span>
+              </div>
+              <h3>{{ email.subject or "(no subject)" }}</h3>
+              <p>{{ display_sender_name(email) }}</p>
+            </div>
+            <div class="document-type-mail-side">
+              {{ category_chip(label) }}
+              <span class="chip receiver-chip {{ receiver_chip_class(routing_text, label) }}">{{ routing_text }}</span>
+            </div>
+            <div class="document-type-attachments" aria-label="매칭 첨부파일">
+              {% for attachment in email.document_attachments %}
+                <span class="document-type-attachment" title="{{ attachment.filename }}">
+                  <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
+                  {{ attachment.filename or "attachment" }}
+                  {% if attachment.parse_status %}
+                    <small>{{ attachment.parse_status }}</small>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% else %}
+    <section class="document-type-empty">
+      <div>표시할 첨부파일 문서 유형이 없습니다.</div>
+    </section>
+  {% endfor %}
+</div>

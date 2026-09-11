@@ -1,0 +1,168 @@
+<section class="view page-view evaluation-view" data-view="evaluation">
+  {% if not evaluation.available %}
+    <section class="panel evaluation-empty">
+      <div class="panel-head">
+        <h2>AI 품질 리포트</h2>
+      </div>
+      <div class="panel-body">
+        <p>{{ evaluation.message }}</p>
+        <p class="evaluation-empty-help">평가 실행 후 이 화면에서 핵심 품질 결과와 실패 원인을 한 장으로 확인할 수 있습니다.</p>
+        <code>{{ evaluation.command }}</code>
+        <div class="evaluation-report-switcher">
+          {% for option in evaluation.report_options %}
+            <a href="/ui/evaluation?report={{ option.id }}">{{ option.label }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  {% else %}
+    <section class="evaluation-report-card {{ 'is-passed' if evaluation.quality_passed else 'needs-attention' }}">
+      <header class="evaluation-report-head">
+        <div class="evaluation-report-title">
+          <span class="evaluation-eyebrow">AI QUALITY REPORT</span>
+          <h1>{{ '품질 기준 통과' if evaluation.quality_passed else '품질 기준 미달' }}</h1>
+          <p>
+            {{ evaluation.report_label }} · {{ evaluation.generated_at }}
+            <span class="evaluation-dataset-badge">합성 평가 데이터</span>
+          </p>
+        </div>
+        <div class="evaluation-score">
+          <strong>{{ evaluation.quality_passed_count }}/{{ evaluation.quality_target_count }}</strong>
+          <span>핵심 기준 통과</span>
+        </div>
+      </header>
+
+      <div class="evaluation-primary-metrics">
+        {% for target in evaluation.quality_targets %}
+          <article class="evaluation-primary-metric {{ 'is-passed' if target.passed else ('is-pending' if not target.available else 'is-failed') }}">
+            <div>
+              <span>{{ target.label }}</span>
+              <strong>{{ target.metric|metric_fraction if target.available else "측정 안 됨" }}</strong>
+            </div>
+            <small>목표 {{ (target.target * 100)|round|int }}% 이상</small>
+            <div class="evaluation-progress" aria-hidden="true">
+              <i style="width: {{ target.progress }}%"></i>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="evaluation-snapshot-grid">
+      <article class="panel evaluation-outcome-panel">
+        <div class="panel-head">
+          <div>
+            <span class="evaluation-section-kicker">RUN OUTCOME</span>
+            <h2>실행 결과</h2>
+          </div>
+        </div>
+        <div class="panel-body evaluation-outcome-stats">
+          <div><strong>{{ evaluation.metrics.get("total_cases")|metric_fraction }}</strong><span>평가 건수</span></div>
+          <div><strong>{{ evaluation.metrics.get("execution_success_count")|metric_fraction }}</strong><span>실행 성공</span></div>
+          <div><strong>{{ evaluation.metrics.get("review_required_rate")|metric_fraction }}</strong><span>사람 검토 필요</span></div>
+          <div class="{{ 'is-passed' if evaluation.leakage.passed else 'is-failed' }}">
+            <strong>{{ '통과' if evaluation.leakage.passed else '실패' }}</strong><span>데이터 누수 검사</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel evaluation-failure-panel">
+        <div class="panel-head">
+          <div>
+            <span class="evaluation-section-kicker">WHAT TO FIX</span>
+            <h2>주요 실패 원인</h2>
+          </div>
+        </div>
+        <div class="panel-body evaluation-failure-list">
+          {% for item in evaluation.failure_breakdown[:4] %}
+            <div>
+              <span><strong>{{ item.key }}</strong><b>{{ item.count }}건</b></span>
+              <i><em style="width: {{ item.progress }}%"></em></i>
+            </div>
+          {% else %}
+            <p class="evaluation-no-failure">기록된 실패 원인이 없습니다.</p>
+          {% endfor %}
+        </div>
+      </article>
+    </section>
+
+    <section class="panel evaluation-case-panel">
+      <div class="panel-head">
+        <div>
+          <span class="evaluation-section-kicker">CASE RESULTS</span>
+          <h2>케이스별 결과</h2>
+        </div>
+        <div class="evaluation-filters" data-evaluation-filters>
+          <select aria-label="실패 원인 필터" data-filter-key="primary_failure_stage">
+            <option value="">전체 케이스</option>
+            {% for value in evaluation.filters.primary_failure_stage %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap evaluation-table-wrap">
+        <table class="evaluation-table">
+          <thead>
+            <tr>
+              <th>케이스</th>
+              <th>업무 유형</th>
+              <th>유형 결과</th>
+              <th>담당자 배정</th>
+              <th>배정 결과</th>
+              <th>확인할 원인</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for case in evaluation.cases %}
+              <tr
+                data-eval-case
+                data-primary-failure-stage="{{ case.primary_failure_stage }}"
+              >
+                <td><a href="/ui/evaluation/cases/{{ case.email_message_id }}?report={{ evaluation.report_id }}">{{ case.email_message_id[:8] }}</a></td>
+                <td><strong>{{ case.expected_business_type }}</strong><span>→ {{ case.predicted_business_type or "예측 없음" }}</span></td>
+                <td><span class="evaluation-result-pill {{ 'is-passed' if case.business_type_correct == 'True' else 'is-failed' }}">{{ '정확' if case.business_type_correct == 'True' else '오류' }}</span></td>
+                <td><strong>{{ case.expected_assignee_user_id[:8] }}</strong><span>→ {{ case.selected_user_id[:8] if case.selected_user_id else "배정 없음" }}</span></td>
+                <td><span class="evaluation-result-pill {{ 'is-passed' if case.selected_assignee_correct == 'True' else 'is-failed' }}">{{ '정확' if case.selected_assignee_correct == 'True' else '오류' }}</span></td>
+                <td><strong>{{ case.primary_failure_stage or "-" }}</strong><span>{{ case.review_reason or "" }}</span></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <details class="panel evaluation-technical">
+      <summary>리포트 기술 정보</summary>
+      <div class="panel-body">
+        <div class="evaluation-report-switcher">
+          {% for option in evaluation.report_options %}
+            <a class="{{ 'active' if option.id == evaluation.report_id else '' }}" href="/ui/evaluation?report={{ option.id }}">{{ option.label }}</a>
+          {% endfor %}
+        </div>
+        <dl>
+          <div><dt>데이터셋</dt><dd>{{ evaluation.leakage.dataset_version or evaluation.report_id }}</dd></div>
+          <div><dt>Qdrant collection</dt><dd>{{ evaluation.qdrant_collection }}</dd></div>
+          {% for key, value in evaluation.model_context.items() %}
+            <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
+          {% endfor %}
+        </dl>
+      </div>
+    </details>
+
+    <script>
+      document.querySelectorAll("[data-evaluation-filters] select").forEach(function (select) {
+        select.addEventListener("change", function () {
+          const filters = {};
+          document.querySelectorAll("[data-evaluation-filters] select").forEach(function (item) {
+            if (item.value) filters[item.dataset.filterKey] = item.value;
+          });
+          document.querySelectorAll("[data-eval-case]").forEach(function (row) {
+            const visible = Object.keys(filters).every(function (key) {
+              return row.dataset[key.replace(/_([a-z])/g, function (_, c) { return c.toUpperCase(); })] === filters[key];
+            });
+            row.hidden = !visible;
+          });
+        });
+      });
+    </script>
+  {% endif %}
+</section>

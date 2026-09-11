@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "source": "synthetic",
+    "purpose": "Agentic RAG routing development and evaluation",
+    "contains_real_customer_data": false,
+    "generated_at": "2026-07-30",
+    "replacement_policy": "Replace synthetic identities and relationships with approved organization data before production use."
+  },
+  "users": [
+    {"id":"10000000-0000-0000-0000-000000000001","email":"m.kim@dawonict.co.kr","name":"김민수","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000002","email":"sj.yoon@dawonict.co.kr","name":"윤서진","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000003","email":"jh.park@dawonict.co.kr","name":"박지현","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000004","email":"ws.jung@dawonict.co.kr","name":"정우석","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000005","email":"jh.lee@dawonict.co.kr","name":"이준호","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000006","email":"yj.choi@dawonict.co.kr","name":"최유진","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000007","email":"sy.choi@dawonict.co.kr","name":"최서연","role":"member","status":"active"},
+    {"id":"10000000-0000-0000-0000-000000000008","email":"th.kang@dawonict.co.kr","name":"강태훈","role":"manager","status":"active"}
+  ],
+  "capabilities": [
+    {"user_id":"10000000-0000-0000-0000-000000000001","type":"customer","value":"한빛조선","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000001","type":"customer","value":"세림마린","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000001","type":"product_group","value":"valve","priority":20},
+    {"user_id":"10000000-0000-0000-0000-000000000001","type":"business_type","value":"purchase_order","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000001","type":"business_type","value":"quotation_request","priority":20},
+    {"user_id":"10000000-0000-0000-0000-000000000002","type":"customer","value":"OceanWorks","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000002","type":"product_group","value":"control_panel","priority":20},
+    {"user_id":"10000000-0000-0000-0000-000000000003","type":"product_group","value":"valve","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000003","type":"business_type","value":"drawing_review","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000003","type":"business_type","value":"specification_review","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000004","type":"product_group","value":"sensor","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000004","type":"product_group","value":"control_panel","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000005","type":"business_type","value":"service_request","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000005","type":"business_type","value":"claim","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000006","type":"business_type","value":"urgent_failure","priority":1},
+    {"user_id":"10000000-0000-0000-0000-000000000007","type":"business_type","value":"delivery_confirmation","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000007","type":"business_type","value":"delivery_delay","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000008","type":"business_type","value":"invoice","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000008","type":"business_type","value":"payment_inquiry","priority":10},
+    {"user_id":"10000000-0000-0000-0000-000000000008","type":"business_type","value":"spam","priority":50},
+    {"user_id":"10000000-0000-0000-0000-000000000008","type":"fallback","value":"review_required","priority":1}
+  ],
+  "routing_policy": {
+    "auto_assign_min_score": 0.82,
+    "minimum_margin": 0.15,
+    "classification_min_confidence": 0.78,
+    "weights": {
+      "customer_owner": 0.30,
+      "product_owner": 0.20,
+      "business_type": 0.20,
+      "project_owner": 0.10,
+      "historical_assignment": 0.10,
+      "similar_case": 0.05,
+      "availability": 0.05
+    }
+  }
+}

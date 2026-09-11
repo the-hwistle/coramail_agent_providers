@@ -1,0 +1,59 @@
+{% macro category_chip(label) -%}
+  <span
+    class="chip category-chip {{ category_class(label) }}"
+  >{{ label }}</span>
+{%- endmacro %}
+
+{% macro empty_state(text) -%}
+  <div class="empty">{{ text }}</div>
+{%- endmacro %}
+
+{% macro info_tooltip(text, label="설명") -%}
+  <span class="info-tooltip">
+    <button type="button" class="info-tooltip-trigger" aria-label="{{ label }}">
+      <span class="material-symbols-outlined">question_mark</span>
+    </button>
+    <span class="info-tooltip-bubble" role="tooltip">{{ text }}</span>
+  </span>
+{%- endmacro %}
+
+{% macro sender_contact_link(email, compact=false) -%}
+  {% set contact = email.sender_contact or {} %}
+  {% set sender_name = display_sender_name(email) %}
+  {% set sender_address = display_sender_address(email) %}
+  {% set contact_name = contact.sender_name or sender_name %}
+  {% set contact_address = contact.sender_address or sender_address %}
+  {% set organization = contact.organization or "미확인" %}
+  <span class="sender-contact" data-sender-contact>
+    <a
+      class="sender-contact-link"
+      href="/?view=address-book{% if contact_address %}&q={{ contact_address|urlencode }}{% endif %}"
+      hx-post="/ui/address-book{% if contact_address %}?q={{ contact_address|urlencode }}{% endif %}"
+      hx-target="#main-panel"
+      hx-swap="innerHTML"
+      hx-sync="#main-panel:replace"
+      hx-on:click="event.stopPropagation()"
+      aria-label="{{ contact_name }} Contacts 보기"
+    >
+      <strong>{{ contact_name }}</strong>
+    </a>
+    <span class="sender-contact-popover" role="tooltip">
+      <span class="sender-contact-popover-title">{{ contact_name }}</span>
+      {% if contact_address %}
+        <span class="sender-contact-popover-line mono">{{ contact_address }}</span>
+      {% endif %}
+      <span class="sender-contact-popover-line">소속 {{ organization }}</span>
+      <span class="sender-contact-popover-line">저장 메일 {{ contact.email_count or 0 }}건 · 스레드 {{ contact.thread_count or 0 }}개</span>
+      {% if contact.last_seen %}
+        <span class="sender-contact-popover-line">최근 {{ format_mail_datetime(contact.last_seen) }}</span>
+      {% endif %}
+      {% if contact.top_categories %}
+        <span class="sender-contact-popover-tags">
+          {% for category in contact.top_categories[:2] %}
+            <span>{{ category.label }} {{ category.count }}</span>
+          {% endfor %}
+        </span>
+      {% endif %}
+    </span>
+  </span>
+{%- endmacro %}

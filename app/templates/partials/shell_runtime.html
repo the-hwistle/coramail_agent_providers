@@ -1,0 +1,4029 @@
+  <script>
+    const isDemoDisplayMode = {{ demo_mode|default(false)|tojson }};
+    const uiSyncState = {
+      timer: null,
+      view: "",
+      versions: {},
+      assetVersion: "{{ asset_version }}",
+      attachmentOpen: {},
+      classificationProgressTimer: null,
+      classificationProgressUid: "",
+      summaryProgressTimer: null,
+      summaryProgressUid: "",
+      attachmentProgressTimer: null,
+      attachmentProgressUid: "",
+      detailRequestUid: "",
+      detailRequestNeedsVersionSync: false,
+      manualRoutePollTimer: null,
+    };
+    const demoMainViewCache = {
+      maxAgeMs: 30000,
+      fragments: new Map(),
+      inflight: new Map(),
+    };
+    const manualRouteConfirmState = {
+      issueRequest: null,
+      trigger: null,
+    };
+    const CHAT_SESSION_STORAGE_KEY = "coramail.chat.session_id";
+    let copyToastTimer = null;
+
+    function mainViewHistoryUrl(fragmentUrl) {
+      const requestUrl = new URL(fragmentUrl || "/", window.location.origin);
+      const historyUrl = new URL("/", window.location.origin);
+      const viewByPath = {
+        "/ui/dashboard": "dashboard",
+        "/ui/inbox": "inbox",
+        "/ui/monitoring": "monitoring",
+        "/ui/ops": "ops",
+        "/ui/assignees": "assignees",
+        "/ui/my-work": "my-work",
+        "/ui/documents": "documents",
+        "/ui/search": "search",
+        "/ui/chats": "chats",
+        "/ui/settings": "settings",
+      };
+      const view = viewByPath[requestUrl.pathname] || "dashboard";
+      if (view !== "dashboard") historyUrl.searchParams.set("view", view);
+      ["q", "category", "limit", "email_index", "email_uid", "selected_email_uid", "assignee", "status", "session_id"].forEach(function (key) {
+        const value = requestUrl.searchParams.get(key);
+        if (value) historyUrl.searchParams.set(key, value);
+      });
+      return `${historyUrl.pathname}${historyUrl.search}`;
+    }
+
+    function safeChatSessionId(value) {
+      const raw = String(value || "").trim();
+      return /^[0-9a-fA-F-]{12,64}$/.test(raw) ? raw : "";
+    }
+
+    function storedChatSessionId() {
+      try {
+        return safeChatSessionId(window.localStorage ? window.localStorage.getItem(CHAT_SESSION_STORAGE_KEY) : "");
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function rememberChatSessionId(sessionId) {
+      const safeSessionId = safeChatSessionId(sessionId);
+      if (!safeSessionId) return "";
+      try {
+        if (window.localStorage) window.localStorage.setItem(CHAT_SESSION_STORAGE_KEY, safeSessionId);
+      } catch (error) {
+        return safeSessionId;
+      }
+      return safeSessionId;
+    }
+
+    function hydrateChatSessionInputs(root) {
+      const scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll("[data-chat-composer] #chatSessionInput").forEach(function (input) {
+        const existing = safeChatSessionId(input.value);
+        if (existing) {
+          rememberChatSessionId(existing);
+          return;
+        }
+        const stored = storedChatSessionId();
+        if (stored) input.value = stored;
+      });
+    }
+
+    function chatSessionUrl(url) {
+      const requestUrl = new URL(url || "/", window.location.origin);
+      if (!["/ui/chats", "/ui/chats-results"].includes(requestUrl.pathname)) {
+        return `${requestUrl.pathname}${requestUrl.search}`;
+      }
+      const sessionId = storedChatSessionId();
+      if (sessionId && !requestUrl.searchParams.get("session_id")) {
+        requestUrl.searchParams.set("session_id", sessionId);
+      }
+      return `${requestUrl.pathname}${requestUrl.search}`;
+    }
+
+    function navButtonForPath(pathname) {
+      return Array.from(document.querySelectorAll(".nav button[hx-post][hx-target='#main-panel']")).find(function (button) {
+        return button.getAttribute("hx-post") === pathname;
+      }) || null;
+    }
+
+    function mainViewPathForView(view) {
+      const pathByView = {
+        dashboard: "/ui/dashboard",
+        inbox: "/ui/inbox",
+        monitoring: "/ui/monitoring",
+        assignees: "/ui/assignees",
+        "my-work": "/ui/my-work",
+        documents: "/ui/documents",
+        "address-book": "/ui/address-book",
+        search: "/ui/search",
+        chats: "/ui/chats",
+        settings: "/ui/settings",
+      };
+      return pathByView[view] || "";
+    }
+
+    function setActiveMainNav(button) {
+      if (!button) return;
+      document.querySelectorAll(".nav button").forEach(function (candidate) {
+        candidate.classList.toggle("active", candidate === button);
+      });
+    }
+
+    function showCopyToast(message) {
+      const toast = document.querySelector("[data-copy-toast]");
+      if (!toast) return;
+      toast.textContent = message || "복사됐습니다.";
+      toast.hidden = false;
+      toast.classList.remove("is-visible");
+      window.requestAnimationFrame(function () {
+        toast.classList.add("is-visible");
+      });
+      if (copyToastTimer) window.clearTimeout(copyToastTimer);
+      copyToastTimer = window.setTimeout(function () {
+        toast.classList.remove("is-visible");
+        window.setTimeout(function () {
+          if (!toast.classList.contains("is-visible")) toast.hidden = true;
+        }, 180);
+      }, 1200);
+    }
+
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        if (!document.execCommand("copy")) throw new Error("copy command failed");
+      } finally {
+        textarea.remove();
+      }
+    }
+
+    function setMainNavigationBusy(isBusy) {
+      const target = document.getElementById("main-panel");
+      if (!target) return;
+      if (isBusy) {
+        target.setAttribute("aria-busy", "true");
+        return;
+      }
+      target.removeAttribute("aria-busy");
+    }
+
+    function installResponsiveHtmxControls(root) {
+      const scope = root && root.querySelectorAll ? root : document;
+      [
+        ["#main-panel", "#main-panel:replace"],
+        ["#email-detail", "#email-detail:replace"],
+        ["#mailRows", "#mailRows:replace"],
+        ["#opsRows", "#opsRows:replace"],
+        ["#dashboardMailRows", "#dashboardMailRows:replace"],
+        ["#opsInspector", "#opsInspector:replace"],
+        ["#assigneeEmailDetailDrawer", "#assigneeEmailDetailDrawer:replace"],
+      ].forEach(function (pair) {
+        scope.querySelectorAll(`[hx-target='${pair[0]}'], [hx-target="${pair[0]}"]`).forEach(function (element) {
+          if (!element.hasAttribute("hx-sync")) {
+            element.setAttribute("hx-sync", pair[1]);
+          }
+        });
+      });
+    }
+
+    function htmxTargetSelector(source) {
+      if (!(source instanceof HTMLElement)) return "";
+      const directTarget = source.getAttribute("hx-target");
+      if (directTarget) return directTarget;
+      const inherited = source.closest("[hx-target]");
+      return inherited ? inherited.getAttribute("hx-target") || "" : "";
+    }
+
+    function htmxRequestPath(event) {
+      return String(event.detail.path || event.detail.requestConfig?.path || "");
+    }
+
+    function setExclusiveActive(source, selector, groupSelector) {
+      if (!(source instanceof HTMLElement) || !source.matches(selector)) return;
+      const group = source.closest(groupSelector);
+      if (!group) return;
+      group.querySelectorAll(selector).forEach(function (candidate) {
+        candidate.classList.toggle("is-active", candidate === source);
+        if (candidate.hasAttribute("aria-pressed")) {
+          candidate.setAttribute("aria-pressed", candidate === source ? "true" : "false");
+        }
+      });
+    }
+
+    function reflectImmediateHtmxState(event) {
+      const source = event.detail.elt;
+      if (!(source instanceof HTMLElement)) return;
+
+      const targetSelector = htmxTargetSelector(source);
+      if (targetSelector === "#main-panel") {
+        const path = htmxRequestPath(event);
+        const requestUrl = new URL(path || source.getAttribute("hx-get") || source.getAttribute("hx-post") || "/", window.location.origin);
+        setActiveMainNav(navButtonForPath(requestUrl.pathname));
+        setMainNavigationBusy(true);
+        if (requestUrl.pathname === "/ui/inbox") {
+          markInboxRowReadOptimistically(source.closest("#dashboardMailRows .clickable-row[data-email-uid]"));
+        }
+      }
+
+      setExclusiveActive(source, ".ops-metric", ".ops-metrics");
+      setExclusiveActive(source, ".assignee-work-stat", ".assignee-work-stats");
+      setExclusiveActive(source, ".work-queue-item", ".work-queue-group");
+      setExclusiveActive(source, ".assignee-roster-item", ".work-queue-assignees");
+
+      if (targetSelector === "#email-detail") {
+        const row = source.closest("#mailRows .clickable-row[data-email-index][data-email-uid]");
+        if (row) {
+          selectInboxRow(row);
+          renderPendingInboxDetail(row);
+        }
+      }
+
+      if (source.matches(".assignee-mail-table .clickable-row")) {
+        source.closest("tbody")?.querySelectorAll(".clickable-row.is-selected").forEach(function (row) {
+          row.classList.toggle("is-selected", row === source);
+        });
+      }
+    }
+
+    function activateMainView(url) {
+      if (isDemoDisplayMode) {
+        window.history.pushState({}, "", mainViewHistoryUrl(url));
+      }
+    }
+
+    function showMainNavigationError(target, error) {
+      target.innerHTML = `<section class="view page-view"><div class="panel"><div class="panel-body">화면을 불러오지 못했습니다: ${String(error.message || error)}</div></div></section>`;
+      setMainNavigationBusy(false);
+      syncPageTitle();
+      syncTopbarActions();
+      syncDashboardViewportMode();
+    }
+
+    function normalizeDemoMainViewUrl(url) {
+      const requestUrl = new URL(url || "/", window.location.origin);
+      return `${requestUrl.pathname}${requestUrl.search}`;
+    }
+
+    function demoMainViewNodesFromHtml(html) {
+      const container = document.createElement("div");
+      container.innerHTML = html || "";
+      return Array.from(container.childNodes);
+    }
+
+    function cachedDemoMainViewEntry(url) {
+      if (!isDemoDisplayMode) return "";
+      const cached = demoMainViewCache.fragments.get(normalizeDemoMainViewUrl(url));
+      if (!cached || Date.now() - cached.storedAt > demoMainViewCache.maxAgeMs) return null;
+      return cached;
+    }
+
+    function cachedDemoMainView(url) {
+      const cached = cachedDemoMainViewEntry(url);
+      return cached ? cached.html || "" : "";
+    }
+
+    function storeDemoMainView(url, html, nodes) {
+      if (!isDemoDisplayMode || !url || !html) return;
+      demoMainViewCache.fragments.set(normalizeDemoMainViewUrl(url), {
+        html,
+        nodes: nodes || demoMainViewNodesFromHtml(html),
+        storedAt: Date.now(),
+      });
+    }
+
+    function cacheCurrentDemoMainView() {
+      if (!isDemoDisplayMode) return;
+      const target = document.getElementById("main-panel");
+      const view = currentMainView();
+      const path = mainViewPathForView(view);
+      if (!target || !path) return;
+      storeDemoMainView(path, target.innerHTML, Array.from(target.childNodes));
+    }
+
+    function clearDemoMainViewCache() {
+      demoMainViewCache.fragments.clear();
+      cacheCurrentDemoMainView();
+    }
+
+    function afterMainPanelHtmlApplied(target, url, options) {
+      const deferHeavyWork = Boolean(options && options.deferHeavyWork);
+      const runHeavyWork = function () {
+        resizeEmailBodyFrames(target);
+        initClassificationProgressForCurrentDetail();
+        initSummaryProgressForCurrentDetail();
+        initAttachmentProgressForCurrentDetail();
+        initDashboardDistribution(target);
+        initDashboardCategoryTimeline(target);
+        initDashboardRoutingOverview(target);
+      };
+      activateMainView(url);
+      limitInboxRows();
+      syncInboxSelection();
+      restoreAttachmentOpenState();
+      initMonitoringColumns(document);
+      initOpsInteractions(document);
+      initAssigneeDetailDrawerInteractions(document);
+      initChatEmailDrawerInteractions(document);
+      updateMailStatusFilterButtons(target);
+      updateCategoryFilterButtons(target);
+      updateDashboardMailFilterButtons();
+      applyDashboardMailStatFilter();
+      syncPageTitle();
+      syncTopbarActions();
+      syncDashboardViewportMode();
+      resetUiSync();
+      scheduleManualRoutePoll(1500);
+      cacheCurrentDemoMainView();
+      if (deferHeavyWork) {
+        window.requestAnimationFrame(function () {
+          window.setTimeout(runHeavyWork, 0);
+        });
+      } else {
+        runHeavyWork();
+      }
+    }
+
+    function applyMainPanelHtml(target, html, url, options) {
+      if (!target) return;
+      storeAttachmentOpenState();
+      cacheCurrentDemoMainView();
+      const cached = options && options.cachedEntry ? options.cachedEntry : null;
+      if (cached && cached.nodes && cached.nodes.length) {
+        target.replaceChildren(...cached.nodes);
+      } else {
+        target.innerHTML = html;
+      }
+      if (options && options.deferHeavyWork) {
+        activateMainView(url);
+        syncPageTitle();
+        syncTopbarActions();
+        syncDashboardViewportMode();
+        setMainNavigationBusy(false);
+        window.requestAnimationFrame(function () {
+          window.setTimeout(function () {
+            afterMainPanelHtmlApplied(target, url, options);
+            if (window.htmx && target.isConnected) htmx.process(target);
+          }, 0);
+        });
+        return;
+      }
+      afterMainPanelHtmlApplied(target, url, options);
+      if (window.htmx) {
+        window.setTimeout(function () {
+          if (target.isConnected) htmx.process(target);
+        }, 0);
+      }
+    }
+
+    function fetchDemoMainView(url, options) {
+      if (!isDemoDisplayMode) return Promise.resolve("");
+      const key = normalizeDemoMainViewUrl(url);
+      if (demoMainViewCache.inflight.has(key)) return demoMainViewCache.inflight.get(key);
+      const request = fetch(key, {
+        method: "POST",
+        headers: { "HX-Request": "true", Accept: "text/html" },
+        cache: "no-store",
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        })
+        .then(function (html) {
+          storeDemoMainView(key, html);
+          if (options && options.refreshVisible && normalizeDemoMainViewUrl(mainViewPathForView(currentMainView())) === key) {
+            const target = document.getElementById("main-panel");
+            applyMainPanelHtml(target, html, key, {
+              cachedEntry: cachedDemoMainViewEntry(key),
+              deferHeavyWork: true,
+            });
+          }
+          return html;
+        })
+        .catch(function (error) {
+          console.warn("demo tab prefetch failed", error);
+          return "";
+        })
+        .finally(function () {
+          demoMainViewCache.inflight.delete(key);
+        });
+      demoMainViewCache.inflight.set(key, request);
+      return request;
+    }
+
+    function prefetchDemoMainViews() {
+      if (!isDemoDisplayMode) return;
+      cacheCurrentDemoMainView();
+      const buttons = Array.from(document.querySelectorAll(".nav button[hx-post][hx-target='#main-panel']"));
+      buttons.forEach(function (button, index) {
+        const url = button.getAttribute("hx-post") || "";
+        if (!url || cachedDemoMainViewEntry(url)) return;
+        window.setTimeout(function () {
+          fetchDemoMainView(url);
+        }, 150 + index * 220);
+      });
+    }
+
+    function installDemoMainNavigationCache() {
+      if (!isDemoDisplayMode) return;
+      document.addEventListener("pointerenter", function (event) {
+        const button = event.target.closest(".nav button[hx-post][hx-target='#main-panel']");
+        if (!button) return;
+        fetchDemoMainView(button.getAttribute("hx-post") || "");
+      }, true);
+      document.addEventListener("focusin", function (event) {
+        const button = event.target.closest(".nav button[hx-post][hx-target='#main-panel']");
+        if (!button) return;
+        fetchDemoMainView(button.getAttribute("hx-post") || "");
+      });
+      document.addEventListener("click", function (event) {
+        const button = event.target.closest(".nav button[hx-post][hx-target='#main-panel']");
+        if (!button) return;
+        const url = button.getAttribute("hx-post") || "";
+        const cached = cachedDemoMainViewEntry(url);
+        if (!cached || !cached.html) {
+          fetchDemoMainView(url);
+          return;
+        }
+        const target = document.querySelector(button.getAttribute("hx-target") || "#main-panel");
+        if (!target) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setActiveMainNav(button);
+        setMainNavigationBusy(false);
+        applyMainPanelHtml(target, cached.html, url, {
+          cachedEntry: cached,
+          deferHeavyWork: true,
+        });
+        fetchDemoMainView(url, { refreshVisible: true });
+      }, true);
+    }
+
+    function loadMainViewWithoutHtmx(button) {
+      const url = chatSessionUrl(button.getAttribute("hx-post"));
+      const target = document.querySelector(button.getAttribute("hx-target") || "#main-panel");
+      if (!url || !target) return;
+      setActiveMainNav(button);
+      setMainNavigationBusy(true);
+      fetch(url, { method: "POST", headers: { "HX-Request": "true" } })
+        .then(function (response) {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        })
+        .then(function (html) {
+          applyMainPanelHtml(target, html, url);
+        })
+        .catch(function (error) {
+          showMainNavigationError(target, error);
+        })
+        .finally(function () {
+          setMainNavigationBusy(false);
+        });
+    }
+
+    function installMainNavigation() {
+      document.querySelectorAll(".nav button[hx-post][hx-target='#main-panel']").forEach(function (button) {
+        button.addEventListener("click", function (event) {
+          if (!window.htmx) {
+            event.preventDefault();
+            event.stopPropagation();
+            loadMainViewWithoutHtmx(button);
+            return;
+          }
+          setActiveMainNav(button);
+          setMainNavigationBusy(true);
+        });
+      });
+    }
+
+    function installSearchFormFallback() {
+      document.addEventListener("submit", function (event) {
+        const form = event.target;
+        if (!form || !form.matches || !form.matches("form.search-box")) return;
+        if (window.htmx) return;
+
+        const targetSelector = form.getAttribute("hx-target") || "#search-results";
+        const target = document.querySelector(targetSelector);
+        const results = document.querySelector("#search-results");
+        if (form.matches("[data-chat-composer]")) hydrateChatSessionInputs(form);
+        const url = new URL(chatSessionUrl(form.getAttribute("hx-get") || form.getAttribute("action") || "/ui/search-results"), window.location.origin);
+        const formData = new FormData(form);
+        for (const pair of formData.entries()) {
+          url.searchParams.set(pair[0], pair[1]);
+        }
+        if (!target) return;
+
+        event.preventDefault();
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = true;
+        renderChatPendingState(form);
+        target.setAttribute("aria-busy", "true");
+        if (results) results.classList.add("is-loading");
+        fetch(url.toString(), { headers: { "HX-Request": "true" } })
+          .then(function (response) {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.text();
+          })
+          .then(function (html) {
+            target.innerHTML = html;
+            syncChatSessionInputFromResponse(form, target);
+            playChatTurnEnter(target);
+          })
+          .catch(function (error) {
+            if (form.matches("[data-chat-composer]")) {
+              renderChatErrorState(form, `대화 결과를 불러오지 못했습니다: ${String(error.message || error)}`);
+            } else {
+              target.innerHTML = `<div class="notice danger">검색 결과를 불러오지 못했습니다: ${String(error.message || error)}</div>`;
+            }
+          })
+          .finally(function () {
+            target.removeAttribute("aria-busy");
+            if (results) results.classList.remove("is-loading");
+            if (submitButton) submitButton.disabled = false;
+          });
+      });
+    }
+
+    function reducedMotionPreferred() {
+      return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+
+    function playMotionEnter(element) {
+      if (!element || reducedMotionPreferred()) return;
+      element.classList.remove("motion-enter");
+      window.requestAnimationFrame(function () {
+        element.classList.add("motion-enter");
+      });
+    }
+
+    function playSideDrawerEnter(element) {
+      if (!element || reducedMotionPreferred()) return;
+      element.classList.remove("side-drawer-enter");
+      void element.offsetWidth;
+      element.classList.add("side-drawer-enter");
+    }
+
+    function playChatTurnEnter(target) {
+      if (!target || reducedMotionPreferred()) return;
+      const conversations = target.querySelectorAll(".chat-conversation, .chat-empty");
+      const latest = conversations[conversations.length - 1];
+      if (latest) {
+        if (latest.classList.contains("chat-empty") || latest.classList.contains("chat-conversation-pending")) {
+          playMotionEnter(latest);
+          return;
+        }
+        const latestNodes = latest.querySelectorAll(".chat-message-user, .chat-message-group-assistant");
+        const startIndex = Math.max(0, latestNodes.length - 2);
+        for (let index = startIndex; index < latestNodes.length; index += 1) {
+          playMotionEnter(latestNodes[index]);
+        }
+        return;
+      }
+      const messageNodes = target.querySelectorAll(".chat-message, .chat-message-group");
+      const lastMessage = messageNodes[messageNodes.length - 1];
+      if (lastMessage) playMotionEnter(lastMessage);
+    }
+
+    function chatResultsBodyForForm(form) {
+      if (!form || !form.matches || !form.matches("[data-chat-composer]")) return null;
+      const targetSelector = form.getAttribute("hx-target") || "#chat-results-body";
+      return document.querySelector(targetSelector);
+    }
+
+    function chatComposerForSource(source) {
+      if (!source || !source.matches) return null;
+      if (source.matches("[data-chat-composer]")) return source;
+      const view = source.closest(".chats-view");
+      return view ? view.querySelector("[data-chat-composer]") : document.querySelector("[data-chat-composer]");
+    }
+
+    function scrollChatThreadToBottom(form) {
+      const target = chatResultsBodyForForm(form);
+      const thread = target ? target.closest("[data-chat-thread]") : null;
+      if (!thread) return;
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function syncChatSessionInputFromResponse(form, target) {
+      if (!form || !target || !form.matches("[data-chat-composer]")) return;
+      const nextInput = target.querySelector("#chatSessionInput");
+      const currentInput = form.querySelector("#chatSessionInput");
+      if (nextInput && currentInput) {
+        currentInput.value = nextInput.value || currentInput.value || "";
+        rememberChatSessionId(currentInput.value);
+        nextInput.remove();
+      }
+      const nextHistoryInput = target.querySelector("#chatHistoryInput");
+      const currentHistoryInput = form.querySelector("#chatHistoryInput");
+      if (nextHistoryInput && currentHistoryInput) {
+        currentHistoryInput.value = nextHistoryInput.value || "[]";
+        nextHistoryInput.remove();
+      }
+    }
+
+    function renderChatPendingState(form, queryOverride) {
+      const target = chatResultsBodyForForm(form);
+      if (!target) return;
+      const input = form.querySelector("[name='q']");
+      const query = String(queryOverride || (input ? input.value : "") || "").trim();
+      if (!query) return;
+      form.dataset.chatPendingQuery = query;
+      const template = document.getElementById("chatPendingTemplate");
+      if (!template || !template.content) return;
+      target.querySelectorAll(".chat-conversation-pending").forEach(function (node) {
+        node.remove();
+      });
+      target.querySelectorAll(".chat-empty").forEach(function (node) {
+        node.remove();
+      });
+      const fragment = template.content.cloneNode(true);
+      const queryNode = fragment.querySelector("[data-chat-pending-query]");
+      if (queryNode) queryNode.textContent = query;
+      target.appendChild(fragment);
+      if (input) input.value = "";
+      playChatTurnEnter(target);
+      scrollChatThreadToBottom(form);
+    }
+
+    function renderChatErrorState(form, message) {
+      const target = chatResultsBodyForForm(form);
+      if (!target) return;
+      const input = form.querySelector("[name='q']");
+      const query = String((form.dataset.chatPendingQuery || (input ? input.value : "")) || "").trim();
+      const wrapper = document.createElement("div");
+      wrapper.className = "chat-conversation";
+      if (query) {
+        const userMessage = document.createElement("div");
+        userMessage.className = "chat-message chat-message-user";
+        const userBubble = document.createElement("div");
+        userBubble.className = "chat-bubble";
+        userBubble.textContent = query;
+        userMessage.appendChild(userBubble);
+        wrapper.appendChild(userMessage);
+      }
+      const group = document.createElement("div");
+      group.className = "chat-message-group chat-message-group-assistant";
+      const assistantMessage = document.createElement("div");
+      assistantMessage.className = "chat-message chat-message-assistant";
+      const avatar = document.createElement("div");
+      avatar.className = "chat-avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = "AI";
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble chat-error-bubble";
+      const strong = document.createElement("strong");
+      strong.textContent = message;
+      bubble.appendChild(strong);
+      assistantMessage.appendChild(avatar);
+      assistantMessage.appendChild(bubble);
+      group.appendChild(assistantMessage);
+      wrapper.appendChild(group);
+      target.replaceChildren(wrapper);
+      playMotionEnter(wrapper);
+      scrollChatThreadToBottom(form);
+    }
+
+    function installSearchExamples() {
+      document.addEventListener("click", function (event) {
+        const button = event.target && event.target.closest ? event.target.closest("[data-search-example]") : null;
+        if (!button) return;
+        const query = button.dataset.searchExample || "";
+        const inputSelector = button.dataset.searchInput || "#searchQueryInput";
+        const input = document.querySelector(inputSelector);
+        const form = input ? input.closest("form.search-box") : null;
+        if (!input || !form || !query) return;
+        event.preventDefault();
+        input.value = query;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    function limitInboxRows() {
+      const wrap = document.querySelector(".inbox-table-wrap");
+      if (!wrap) return;
+      wrap.style.removeProperty("height");
+
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      if (!viewportHeight) return;
+
+      const header = wrap.querySelector("thead");
+      const sampleRow = wrap.querySelector("#mailRows .clickable-row");
+      const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+      const rowHeight = sampleRow ? Math.ceil(sampleRow.getBoundingClientRect().height) : 0;
+      const rowsVisibleAroundSelection = 6;
+      const rowsBasedHeight = rowHeight ? headerHeight + rowHeight * rowsVisibleAroundSelection + 2 : 0;
+      const viewportBasedHeight = Math.round(Math.min(Math.max(viewportHeight * 0.44, 420), 680));
+      const preferredHeight = rowsBasedHeight || viewportBasedHeight;
+      wrap.style.height = `${preferredHeight}px`;
+    }
+
+    function centerInboxRow(row, wrap) {
+      if (!row || !wrap) return;
+
+      const wrapRect = wrap.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const header = wrap.querySelector("thead");
+      const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+      const currentScrollTop = wrap.scrollTop;
+      const rowTop = rowRect.top - wrapRect.top + currentScrollTop;
+      const rowCenter = rowTop + row.offsetHeight / 2;
+      const visibleHeight = wrap.clientHeight - headerHeight;
+      wrap.scrollTo({
+        top: Math.max(rowCenter - headerHeight - visibleHeight / 2, 0),
+        behavior: "smooth",
+      });
+    }
+
+    function selectInboxRow(row) {
+      if (!row) return;
+
+      const selectedInput = document.getElementById("selectedEmailIndex");
+      const selectedUidInput = document.getElementById("selectedEmailUid");
+      if (selectedInput) selectedInput.value = row.dataset.emailIndex || "";
+      if (selectedUidInput) selectedUidInput.value = row.dataset.emailUid || "";
+
+      document.querySelectorAll("#mailRows .clickable-row[data-email-uid]").forEach(function (candidate) {
+        candidate.classList.toggle("is-selected", candidate === row);
+      });
+      markInboxRowReadOptimistically(row);
+      centerInboxRow(row, document.querySelector(".inbox-table-wrap"));
+    }
+
+    function markInboxRowReadOptimistically(row) {
+      if (!row) return;
+      const indicator = row.querySelector(".mail-read-state-cell .mail-read-indicator");
+      if (!indicator) return;
+      row.classList.add("is-assignee-read");
+      indicator.textContent = "drafts";
+      indicator.setAttribute("title", "읽은 메일");
+      indicator.setAttribute("aria-label", "읽은 메일");
+    }
+
+    function markInboxRowReadByUid(uid) {
+      if (!uid) return;
+      document.querySelectorAll("#mailRows .clickable-row[data-email-uid], #dashboardMailRows .clickable-row[data-email-uid]").forEach(function (candidate) {
+        if (candidate.dataset.emailUid === uid) markInboxRowReadOptimistically(candidate);
+      });
+    }
+
+    function syncInboxSelection() {
+      const selectedInput = document.getElementById("selectedEmailIndex");
+      const selectedUidInput = document.getElementById("selectedEmailUid");
+      const detailCard = document.querySelector("#email-detail .detail-card[data-email-index][data-email-uid]");
+      if (!selectedInput || !selectedUidInput || !detailCard) return;
+
+      const selectedIndex = detailCard.dataset.emailIndex || "";
+      const selectedUid = detailCard.dataset.emailUid || "";
+      selectedInput.value = selectedIndex;
+      selectedUidInput.value = selectedUid;
+
+      const rows = document.querySelectorAll("#mailRows .clickable-row[data-email-index][data-email-uid]");
+      const wrap = document.querySelector(".inbox-table-wrap");
+      let selectedRow = null;
+      rows.forEach(function (row) {
+        const isSelected = row.dataset.emailUid === selectedUid;
+        row.classList.toggle("is-selected", isSelected);
+        if (isSelected) selectedRow = row;
+      });
+
+      if (selectedRow && wrap) {
+        centerInboxRow(selectedRow, wrap);
+      }
+    }
+
+    function currentDetailUid() {
+      const detailCard = document.querySelector("#email-detail .detail-card[data-email-uid]");
+      return detailCard ? (detailCard.dataset.emailUid || "") : "";
+    }
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, function (character) {
+        return ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[character] || character;
+      });
+    }
+
+    function rowText(row, selector) {
+      const node = row ? row.querySelector(selector) : null;
+      return node ? node.textContent.trim() : "";
+    }
+
+    function renderPendingInboxDetail(row) {
+      const target = document.getElementById("email-detail");
+      if (!target || !row) return;
+
+      const uid = row.dataset.emailUid || "";
+      const index = row.dataset.emailIndex || "";
+      if (!uid || uid === currentDetailUid()) return;
+
+      const subject = rowText(row, ".mail-subject-text") || "(no subject)";
+      const sender = rowText(row, ".inbox-sender-cell strong") || rowText(row, ".dashboard-sender-cell strong") || "-";
+      const category = row.dataset.mailCategory || row.dataset.businessLabel || "";
+
+      storeAttachmentOpenState();
+      uiSyncState.detailRequestUid = uid;
+      uiSyncState.detailRequestNeedsVersionSync = false;
+      target.setAttribute("aria-busy", "true");
+      target.innerHTML = `
+        <article class="detail-card detail-card--pending" data-email-index="${escapeHtml(index)}" data-email-uid="${escapeHtml(uid)}">
+          <div class="detail-head">
+            <div class="detail-head-copy">
+              <span class="label">Selected Mail</span>
+              <h2>${escapeHtml(subject)}</h2>
+              <div class="detail-head-meta" role="group" aria-label="메일 메타 정보">
+                <span class="detail-head-sender"><strong>${escapeHtml(sender)}</strong></span>
+                ${category ? `<span class="chip">${escapeHtml(category)}</span>` : ""}
+              </div>
+            </div>
+          </div>
+          <div class="detail-layout">
+            <section class="panel message-panel">
+              <div class="panel-body message-panel-body">
+                <div class="empty-state">메일 상세를 불러오는 중...</div>
+              </div>
+            </section>
+          </div>
+        </article>`;
+    }
+
+    function renderInboxDetailRequestError(status) {
+      const target = document.getElementById("email-detail");
+      if (!target) return;
+      const message = Number(status) === 403
+        ? "이 메일을 볼 권한이 없습니다."
+        : "메일 상세를 불러오지 못했습니다.";
+      target.removeAttribute("aria-busy");
+      target.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    }
+
+    function stopClassificationProgress() {
+      uiSyncState.classificationProgressTimer = null;
+      uiSyncState.classificationProgressUid = "";
+    }
+
+    function stopSummaryProgress() {
+      uiSyncState.summaryProgressTimer = null;
+      uiSyncState.summaryProgressUid = "";
+    }
+
+    function stopAttachmentProgress() {
+      uiSyncState.attachmentProgressTimer = null;
+      uiSyncState.attachmentProgressUid = "";
+    }
+
+    function setClassificationProgress(card, percent, label, caption, failed) {
+      if (!card) return;
+      const progress = card.querySelector("[data-classification-progress]");
+      if (!progress) return;
+
+      const boundedPercent = Math.max(0, Math.min(100, Math.round(percent)));
+      const fill = progress.querySelector("[data-classification-progress-fill]");
+      const value = progress.querySelector("[data-classification-progress-value]");
+      const labelNode = progress.querySelector("[data-classification-progress-label-node]");
+      const captionNode = progress.querySelector("[data-classification-progress-caption-node]");
+      const track = progress.querySelector("[data-classification-progress-track]");
+
+      progress.classList.add("is-active");
+      progress.classList.toggle("is-failed", Boolean(failed));
+      if (fill) fill.style.width = `${boundedPercent}%`;
+      if (value) value.textContent = failed ? "실패" : `${boundedPercent}%`;
+      if (labelNode && label) labelNode.textContent = label;
+      if (captionNode && caption) captionNode.textContent = caption;
+      if (track) track.setAttribute("aria-valuenow", String(boundedPercent));
+    }
+
+    function activateClassificationProgress(card, options) {
+      if (!card) return;
+
+      const emailUid = card.dataset.emailUid || "";
+      const progress = card.querySelector("[data-classification-progress]");
+      if (!progress) return;
+
+      const opts = options || {};
+      const label = opts.label || progress.dataset.classificationProgressLabel || "메일 유형 재분류 중";
+      const caption = opts.caption || progress.dataset.classificationProgressCaption || "현재 규칙과 모델 기준으로 메일 유형 분류를 다시 수행하고 있습니다.";
+      const initialPercent = Number(opts.initialPercent ?? progress.dataset.classificationProgressInitial ?? 10) || 10;
+
+      stopClassificationProgress();
+      uiSyncState.classificationProgressUid = emailUid;
+      setClassificationProgress(card, initialPercent, label, caption, false);
+    }
+
+    function failClassificationProgress(card, label, caption) {
+      if (!card) return;
+      stopClassificationProgress();
+      setClassificationProgress(
+        card,
+        100,
+        label || "메일 유형 재분류 실패",
+        caption || "재분류 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        true,
+      );
+    }
+
+    function setSummaryProgress(card, percent, label, caption, failed) {
+      if (!card) return;
+      const progress = card.querySelector("[data-summary-progress]");
+      if (!progress) return;
+
+      const boundedPercent = Math.max(0, Math.min(100, Math.round(percent)));
+      const fill = progress.querySelector("[data-summary-progress-fill]");
+      const value = progress.querySelector("[data-summary-progress-value]");
+      const labelNode = progress.querySelector("[data-summary-progress-label-node]");
+      const captionNode = progress.querySelector("[data-summary-progress-caption-node]");
+      const track = progress.querySelector("[data-summary-progress-track]");
+
+      progress.classList.add("is-active");
+      progress.classList.toggle("is-failed", Boolean(failed));
+      if (fill) fill.style.width = `${boundedPercent}%`;
+      if (value) value.textContent = failed ? "실패" : `${boundedPercent}%`;
+      if (labelNode && label) labelNode.textContent = label;
+      if (captionNode && caption) captionNode.textContent = caption;
+      if (track) track.setAttribute("aria-valuenow", String(boundedPercent));
+    }
+
+    function activateSummaryProgress(card, options) {
+      if (!card) return;
+
+      const emailUid = card.dataset.emailUid || "";
+      const progress = card.querySelector("[data-summary-progress]");
+      if (!progress) return;
+
+      const opts = options || {};
+      const label = opts.label || progress.dataset.summaryProgressLabel || "Summary 생성 중";
+      const caption = opts.caption || progress.dataset.summaryProgressCaption || "AI executive summary를 생성하고 있습니다.";
+      const initialPercent = Number(opts.initialPercent ?? progress.dataset.summaryProgressInitial ?? 10) || 10;
+
+      stopSummaryProgress();
+      uiSyncState.summaryProgressUid = emailUid;
+      setSummaryProgress(card, initialPercent, label, caption, false);
+    }
+
+    function failSummaryProgress(card, label, caption) {
+      if (!card) return;
+      stopSummaryProgress();
+      setSummaryProgress(
+        card,
+        100,
+        label || "Summary 생성 실패",
+        caption || "요약 생성 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        true,
+      );
+    }
+
+    function setAttachmentProgress(card, percent, label, caption, failed) {
+      if (!card) return;
+      const progress = card.querySelector("[data-attachment-progress]");
+      if (!progress) return;
+
+      const boundedPercent = Math.max(0, Math.min(100, Math.round(percent)));
+      const fill = progress.querySelector("[data-attachment-progress-fill]");
+      const value = progress.querySelector("[data-attachment-progress-value]");
+      const labelNode = progress.querySelector("[data-attachment-progress-label-node]");
+      const captionNode = progress.querySelector("[data-attachment-progress-caption-node]");
+      const track = progress.querySelector("[data-attachment-progress-track]");
+
+      progress.classList.add("is-active");
+      progress.classList.toggle("is-failed", Boolean(failed));
+      if (fill) fill.style.width = `${boundedPercent}%`;
+      if (value) value.textContent = failed ? "실패" : `${boundedPercent}%`;
+      if (labelNode && label) labelNode.textContent = label;
+      if (captionNode && caption) captionNode.textContent = caption;
+      if (track) track.setAttribute("aria-valuenow", String(boundedPercent));
+    }
+
+    function activateAttachmentProgress(card, options) {
+      if (!card) return;
+
+      const emailUid = card.dataset.emailUid || "";
+      const progress = card.querySelector("[data-attachment-progress]");
+      if (!progress) return;
+
+      const opts = options || {};
+      const label = opts.label || progress.dataset.attachmentProgressLabel || "첨부파일 재분석 중";
+      const caption = opts.caption || progress.dataset.attachmentProgressCaption || "첨부파일을 다시 분석하고 있습니다.";
+      const initialPercent = Number(opts.initialPercent ?? progress.dataset.attachmentProgressInitial ?? 10) || 10;
+
+      stopAttachmentProgress();
+      uiSyncState.attachmentProgressUid = emailUid;
+      setAttachmentProgress(card, initialPercent, label, caption, false);
+    }
+
+    function failAttachmentProgress(card, label, caption) {
+      if (!card) return;
+      stopAttachmentProgress();
+      setAttachmentProgress(
+        card,
+        100,
+        label || "첨부파일 재분석 실패",
+        caption || "첨부파일 재분석 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        true,
+      );
+    }
+
+    function initClassificationProgressForCurrentDetail() {
+      const card = document.querySelector("#email-detail .detail-card[data-email-uid]");
+      if (!card) {
+        stopClassificationProgress();
+        return;
+      }
+
+      const progress = card.querySelector("[data-classification-progress]");
+      if (!progress) {
+        stopClassificationProgress();
+        return;
+      }
+
+      const progressState = progress.dataset.classificationProgressState || "";
+      if (progressState === "failed") {
+        stopClassificationProgress();
+        setClassificationProgress(
+          card,
+          Number(progress.dataset.classificationProgressInitial || 100) || 100,
+          progress.dataset.classificationProgressLabel || "메일 유형 재분류 실패",
+          progress.dataset.classificationProgressCaption || "재분류 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.",
+          true,
+        );
+        return;
+      }
+
+      if (progressState === "completed") {
+        stopClassificationProgress();
+        setClassificationProgress(
+          card,
+          Number(progress.dataset.classificationProgressInitial || 100) || 100,
+          progress.dataset.classificationProgressLabel || "메일 유형 재분류 완료",
+          progress.dataset.classificationProgressCaption || "선택한 메일의 최신 분류 결과가 반영되었습니다.",
+          false,
+        );
+        return;
+      }
+
+      if (progressState) {
+        activateClassificationProgress(card, {
+          initialPercent: Number(progress.dataset.classificationProgressInitial || 10),
+          label: progress.dataset.classificationProgressLabel || "메일 유형 재분류 중",
+          caption: progress.dataset.classificationProgressCaption || "현재 규칙과 모델 기준으로 메일 유형 분류를 다시 수행하고 있습니다.",
+        });
+        return;
+      }
+
+      stopClassificationProgress();
+    }
+
+    function initSummaryProgressForCurrentDetail() {
+      const card = document.querySelector("#email-detail .detail-card[data-email-uid]");
+      if (!card) {
+        stopSummaryProgress();
+        return;
+      }
+
+      const progress = card.querySelector("[data-summary-progress]");
+      if (!progress) {
+        stopSummaryProgress();
+        return;
+      }
+
+      const progressState = progress.dataset.summaryProgressState || "";
+      if (progressState === "failed") {
+        stopSummaryProgress();
+        setSummaryProgress(
+          card,
+          Number(progress.dataset.summaryProgressInitial || 100) || 100,
+          progress.dataset.summaryProgressLabel || "Summary 생성 실패",
+          progress.dataset.summaryProgressCaption || "요약 생성 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.",
+          true,
+        );
+        return;
+      }
+
+      if (progressState === "completed") {
+        stopSummaryProgress();
+        setSummaryProgress(
+          card,
+          Number(progress.dataset.summaryProgressInitial || 100) || 100,
+          progress.dataset.summaryProgressLabel || "재생성 완료",
+          progress.dataset.summaryProgressCaption || "현재 프롬프트 버전으로 executive summary를 다시 생성했습니다.",
+          false,
+        );
+        return;
+      }
+
+      if (progressState) {
+        activateSummaryProgress(card, {
+          initialPercent: Number(progress.dataset.summaryProgressInitial || 10),
+          label: progress.dataset.summaryProgressLabel || "Summary 생성 중",
+          caption: progress.dataset.summaryProgressCaption || "AI executive summary를 생성하고 있습니다.",
+        });
+        return;
+      }
+
+      stopSummaryProgress();
+    }
+
+    function initAttachmentProgressForCurrentDetail() {
+      const card = document.querySelector("#email-detail .detail-card[data-email-uid]");
+      if (!card) {
+        stopAttachmentProgress();
+        return;
+      }
+
+      const progress = card.querySelector("[data-attachment-progress]");
+      if (!progress) {
+        stopAttachmentProgress();
+        return;
+      }
+
+      const progressState = progress.dataset.attachmentProgressState || "";
+      if (progressState === "failed") {
+        stopAttachmentProgress();
+        setAttachmentProgress(
+          card,
+          Number(progress.dataset.attachmentProgressInitial || 100) || 100,
+          progress.dataset.attachmentProgressLabel || "첨부파일 재분석 실패",
+          progress.dataset.attachmentProgressCaption || "첨부파일 재분석 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.",
+          true,
+        );
+        return;
+      }
+
+      if (progressState === "completed") {
+        stopAttachmentProgress();
+        setAttachmentProgress(
+          card,
+          Number(progress.dataset.attachmentProgressInitial || 100) || 100,
+          progress.dataset.attachmentProgressLabel || "첨부파일 재분석 완료",
+          progress.dataset.attachmentProgressCaption || "첨부파일 분석 결과를 다시 반영했습니다.",
+          false,
+        );
+        return;
+      }
+
+      if (progressState) {
+        activateAttachmentProgress(card, {
+          initialPercent: Number(progress.dataset.attachmentProgressInitial || 10),
+          label: progress.dataset.attachmentProgressLabel || "첨부파일 재분석 중",
+          caption: progress.dataset.attachmentProgressCaption || "첨부파일을 다시 분석하고 있습니다.",
+        });
+        return;
+      }
+
+      stopAttachmentProgress();
+    }
+
+    function storeAttachmentOpenState() {
+      const emailUid = currentDetailUid();
+      if (!emailUid) return;
+      const openKeys = Array.from(document.querySelectorAll("#email-detail details.attachment[data-attachment-key][open]"))
+        .map(function (item) { return item.dataset.attachmentKey || ""; })
+        .filter(Boolean);
+      uiSyncState.attachmentOpen[emailUid] = openKeys;
+    }
+
+    function restoreAttachmentOpenState() {
+      const emailUid = currentDetailUid();
+      if (!emailUid) return;
+      const openKeys = new Set(uiSyncState.attachmentOpen[emailUid] || []);
+      document.querySelectorAll("#email-detail details.attachment[data-attachment-key]").forEach(function (item) {
+        item.open = openKeys.has(item.dataset.attachmentKey || "");
+      });
+    }
+
+    function currentMainView() {
+      const view = document.querySelector("#main-panel .view[data-view]");
+      return view ? (view.dataset.view || "") : "";
+    }
+
+    function currentUiView() {
+      const view = currentMainView();
+      if (view === "dashboard" || view === "inbox" || view === "monitoring" || view === "documents") return view;
+      return "";
+    }
+
+    function syncPageTitle() {
+      const titleNode = document.getElementById("pageTitle");
+      if (!titleNode) return;
+
+      const titles = {
+        dashboard: "Dashboard",
+        inbox: "Inbox",
+        monitoring: "Monitoring",
+        ops: "Monitoring",
+        assignees: "Assignments",
+        "my-work": "My Work",
+        documents: "Documents",
+        "address-book": "Contacts",
+        search: "Search",
+        chats: "Chats",
+        settings: "Settings",
+      };
+      titleNode.textContent = titles[currentMainView()] || "CoRA Mail AI Router";
+    }
+
+    function syncTopbarActions() {
+      const manualSyncButton = document.getElementById("topbarManualSync");
+      if (!manualSyncButton) return;
+      manualSyncButton.hidden = currentMainView() !== "dashboard";
+    }
+
+    function syncDashboardViewportMode() {
+      document.body.classList.toggle("dashboard-viewport-locked", currentMainView() === "dashboard");
+      document.body.classList.toggle("documents-viewport-locked", currentMainView() === "documents");
+      syncDocumentsViewportLayout();
+    }
+
+    function syncDocumentsViewportLayout() {
+      const view = document.querySelector('.document-types-view');
+      const grid = view ? view.querySelector('.document-type-card-grid') : null;
+      if (!view || !grid) return;
+
+      const cards = Array.from(grid.querySelectorAll('.document-type-card'));
+      if (!cards.length) return;
+
+      const gap = Number.parseFloat(window.getComputedStyle(grid).gap || "0") || 0;
+      const gridWidth = grid.clientWidth;
+      const minColumnWidth = window.innerWidth <= 640 ? 150 : window.innerWidth <= 1180 ? 220 : 248;
+      const columnCount = Math.max(1, Math.floor((gridWidth + gap) / (minColumnWidth + gap)));
+      const rowCount = Math.max(1, Math.ceil(cards.length / columnCount));
+      const cardHeight = Math.max(72, Math.floor((grid.clientHeight - gap * (rowCount - 1)) / rowCount));
+
+      grid.style.setProperty("--document-card-height", `${cardHeight}px`);
+      grid.style.gridTemplateRows = `repeat(${rowCount}, minmax(0, var(--document-card-height)))`;
+    }
+
+    const documentTypeIconOptions = [
+      "request_quote",
+      "price_check",
+      "receipt_long",
+      "payments",
+      "article",
+      "description",
+      "inventory_2",
+      "fact_check",
+      "contract",
+      "assignment",
+    ];
+
+    function documentTypeIconStorageKey(documentType) {
+      return `coramail.documentTypeIcon.${documentType}`;
+    }
+
+    function storedDocumentTypeIcon(documentType) {
+      try {
+        return window.localStorage.getItem(documentTypeIconStorageKey(documentType));
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function storeDocumentTypeIcon(documentType, icon) {
+      try {
+        window.localStorage.setItem(documentTypeIconStorageKey(documentType), icon);
+      } catch (error) {
+        return;
+      }
+    }
+
+    function defaultDocumentTypeIcon(documentType) {
+      const icon = documentTypeIconOptions[Math.floor(Math.random() * documentTypeIconOptions.length)];
+      storeDocumentTypeIcon(documentType, icon);
+      return icon;
+    }
+
+    function setDocumentTypeIcon(card, icon) {
+      const display = card.querySelector("[data-document-type-icon]");
+      if (display) display.textContent = icon;
+      card.querySelectorAll(".document-type-icon-option").forEach((button) => {
+        button.classList.toggle("is-selected", button.dataset.documentIcon === icon);
+      });
+    }
+
+    function initDocumentTypeIconPickers(root) {
+      const scope = root || document;
+      const cards = scope.matches && scope.matches(".document-type-card")
+        ? [scope]
+        : Array.from(scope.querySelectorAll(".document-type-card"));
+      cards.forEach((card) => {
+        const documentType = card.dataset.documentType || "";
+        if (!documentType) return;
+        let icon = storedDocumentTypeIcon(documentType);
+        if (!documentTypeIconOptions.includes(icon)) {
+          icon = defaultDocumentTypeIcon(documentType);
+        }
+        setDocumentTypeIcon(card, icon);
+      });
+    }
+
+    function isDetailProgressActive() {
+      return Boolean(
+        uiSyncState.classificationProgressUid ||
+        uiSyncState.summaryProgressUid ||
+        uiSyncState.attachmentProgressUid
+      );
+    }
+
+    function dashboardStateUrl() {
+      const url = new URL("/api/ui-state", window.location.origin);
+      url.searchParams.set("view", "dashboard");
+      return url.toString();
+    }
+
+    function inboxStateUrl() {
+      const url = new URL("/api/ui-state", window.location.origin);
+      url.searchParams.set("view", "inbox");
+      const mailSearch = document.getElementById("mailSearch");
+      const categoryFilter = document.getElementById("categoryFilter");
+      const workStatusFilter = document.getElementById("workStatusFilter");
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (mailSearch && mailSearch.value) url.searchParams.set("q", mailSearch.value);
+      if (categoryFilter && categoryFilter.value) url.searchParams.set("category", categoryFilter.value);
+      if (workStatusFilter && workStatusFilter.value) url.searchParams.set("status", workStatusFilter.value);
+      if (selectedIndex && selectedIndex.value) url.searchParams.set("selected_email_index", selectedIndex.value);
+      if (selectedUid && selectedUid.value) url.searchParams.set("selected_email_uid", selectedUid.value);
+      return url.toString();
+    }
+
+    function documentsStateUrl() {
+      const url = new URL("/api/ui-state", window.location.origin);
+      url.searchParams.set("view", "documents");
+      return url.toString();
+    }
+
+    function monitoringStateUrl() {
+      const url = new URL("/api/ui-state", window.location.origin);
+      url.searchParams.set("view", "monitoring");
+      const search = document.getElementById("opsSearch");
+      const category = document.getElementById("opsCategory");
+      const status = document.querySelector(".ops-filters input[name='status']");
+      if (search && search.value) url.searchParams.set("q", search.value);
+      if (category && category.value) url.searchParams.set("category", category.value);
+      if (status && status.value) url.searchParams.set("status", status.value);
+      return url.toString();
+    }
+
+    function refreshFragment(url, targetSelector) {
+      const target = document.querySelector(targetSelector);
+      if (!target || !window.htmx) return;
+      if (targetSelector === "#email-detail" || targetSelector === "#main-panel") {
+        storeAttachmentOpenState();
+      }
+      const method = ["#main-panel", "#email-detail", "#mailRows"].includes(targetSelector) ? "POST" : "GET";
+      htmx.ajax(method, url, { target, swap: "innerHTML" });
+    }
+
+    function dashboardMailRowsUrl() {
+      const url = new URL("/ui/mail-rows", window.location.origin);
+      url.searchParams.set("view", "dashboard");
+      const workStatusFilter = document.getElementById("dashboardWorkStatusFilter");
+      if (workStatusFilter && workStatusFilter.value) url.searchParams.set("status", workStatusFilter.value);
+      return url.toString();
+    }
+
+    function inboxPanelUrlForStatus(status) {
+      const url = new URL("/ui/inbox", window.location.origin);
+      const mailSearch = document.getElementById("mailSearch");
+      const categoryFilter = document.getElementById("categoryFilter");
+      if (mailSearch && mailSearch.value) url.searchParams.set("q", mailSearch.value);
+      if (categoryFilter && categoryFilter.value) url.searchParams.set("category", categoryFilter.value);
+      if (status) url.searchParams.set("status", status);
+      return url.toString();
+    }
+
+    function updateDashboardMailStreamEmptyState() {
+      const dashboardRows = document.getElementById("dashboardMailRows");
+      if (!dashboardRows) return;
+      const rows = dashboardRows.querySelectorAll("tr[data-business-label], tr[data-mail-category]");
+      const visibleCount = Array.from(rows).filter(function (row) {
+        return !row.classList.contains("email-row-hidden-by-category") &&
+          !row.classList.contains("email-row-hidden-by-stat");
+      }).length;
+      const emptyRow = dashboardRows.querySelector("#categoryFilterEmptyRow");
+      if (emptyRow) {
+        emptyRow.hidden = visibleCount > 0;
+      }
+    }
+
+    function dashboardMailFilters() {
+      const dashboardMailFilter = document.getElementById("dashboardMailFilter");
+      const activeFilters = dashboardMailFilter ? dashboardMailFilter.value : "";
+      return new Set(activeFilters.split(",").filter(Boolean));
+    }
+
+    function updateDashboardMailFilterButtons() {
+      const activeFilters = dashboardMailFilters();
+      document.querySelectorAll("[data-dashboard-mail-filter-action]").forEach(function (button) {
+        const isActive = activeFilters.has(button.dataset.dashboardMailFilterAction || "");
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function applyDashboardMailStatFilter() {
+      const dashboardRows = document.getElementById("dashboardMailRows");
+      if (!dashboardRows) return;
+      const activeFilters = dashboardMailFilters();
+      const todayInput = document.getElementById("dashboardMailToday");
+      const today = todayInput ? todayInput.value : "";
+      const rows = dashboardRows.querySelectorAll("tr[data-business-label], tr[data-mail-category]");
+      rows.forEach(function (row) {
+        const shouldShow =
+          (!activeFilters.has("today") || row.dataset.dashboardMailDate === today) &&
+          (!activeFilters.has("urgent") || row.dataset.dashboardMailUrgent === "true");
+        row.classList.toggle("email-row-hidden-by-stat", !shouldShow);
+      });
+      updateDashboardMailStreamEmptyState();
+    }
+
+    function setDashboardMailFilter(filter) {
+      const dashboardMailFilter = document.getElementById("dashboardMailFilter");
+      if (dashboardMailFilter) {
+        dashboardMailFilter.value = filter || "";
+      }
+      updateDashboardMailFilterButtons();
+      applyDashboardMailStatFilter();
+    }
+
+    function updateMailStatusFilterButtons(scope) {
+      const root = scope instanceof Element ? scope : document;
+      const groups = root.matches && root.matches(".mail-status-filter")
+        ? [root]
+        : Array.from(root.querySelectorAll(".mail-status-filter"));
+      groups.forEach(function (group) {
+        if (group.classList.contains("mail-category-filter")) return;
+        const target = group.querySelector("[data-mail-status-filter]")?.dataset.mailStatusTarget || "";
+        const inputId = target === "dashboard" ? "dashboardWorkStatusFilter" : "workStatusFilter";
+        const input = document.getElementById(inputId);
+        const selected = input ? input.value : "";
+        let activeButton = null;
+        group.querySelectorAll("[data-mail-status-filter]").forEach(function (button) {
+          const isActive = (button.dataset.mailStatusFilter || "") === selected;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+          if (isActive) activeButton = button;
+        });
+        updateSlidingFilterHighlight(group, activeButton);
+      });
+    }
+
+    function updateSlidingFilterHighlight(group, activeButton) {
+      if (!(group instanceof HTMLElement) || !(activeButton instanceof HTMLElement)) return;
+      const groupRect = group.getBoundingClientRect();
+      const buttonRect = activeButton.getBoundingClientRect();
+      const x = buttonRect.left - groupRect.left;
+      group.style.setProperty("--mail-status-highlight-x", `${Math.round(x)}px`);
+      group.style.setProperty("--mail-status-highlight-width", `${Math.round(buttonRect.width)}px`);
+      group.style.setProperty("--mail-status-highlight-opacity", "1");
+    }
+
+    function updateCategoryFilterButtons(scope) {
+      const root = scope instanceof Element ? scope : document;
+      const activeCategory = (window.categoryFilterState && window.categoryFilterState.activeCategory) || "__all__";
+      const groups = root.matches && root.matches(".mail-category-filter")
+        ? [root]
+        : Array.from(root.querySelectorAll(".mail-category-filter"));
+      groups.forEach(function (group) {
+        let activeButton = null;
+        group.querySelectorAll("[data-category-filter]").forEach(function (button) {
+          const isActive = (button.dataset.categoryFilter || "__all__") === activeCategory;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+          if (isActive) activeButton = button;
+        });
+        updateSlidingFilterHighlight(group, activeButton);
+      });
+      const selects = root.matches && root.matches("select[data-category-filter-select]")
+        ? [root]
+        : Array.from(root.querySelectorAll("select[data-category-filter-select]"));
+      selects.forEach(function (select) {
+        if (select instanceof HTMLSelectElement) {
+          select.value = activeCategory;
+        }
+      });
+      document.querySelectorAll("[data-category-filter-select]").forEach(function (dropdown) {
+        const targetName = dropdown.dataset.categoryFilterTarget || "dashboard";
+        const inboxCategoryFilter = document.getElementById("categoryFilter");
+        const dropdownCategory = targetName === "inbox"
+          ? ((inboxCategoryFilter && inboxCategoryFilter.value) || "__all__")
+          : activeCategory;
+        const label = dropdown.querySelector("[data-category-filter-selected-label]");
+        dropdown.querySelectorAll("[data-category-filter]").forEach(function (button) {
+          const isActive = (button.dataset.categoryFilter || "__all__") === dropdownCategory;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        if (!label) return;
+        const selectedButton = dropdown.querySelector(
+          "[data-category-filter='" + CSS.escape(dropdownCategory) + "']"
+        );
+        label.textContent = selectedButton ? selectedButton.textContent.trim() : "업무 유형 전체";
+      });
+    }
+
+    window.categoryFilterState = window.categoryFilterState || { activeCategory: "__all__" };
+    window.applyCategoryFilter = function (category) {
+      const selectedCategory = category || "__all__";
+      window.categoryFilterState.activeCategory = selectedCategory;
+      document.querySelectorAll("#dashboardMailRows tr[data-business-label], #dashboardMailRows tr[data-mail-category]").forEach(function (row) {
+        const rowCategory = row.dataset.mailCategory || row.dataset.businessLabel || "";
+        const shouldShow = selectedCategory === "__all__" || rowCategory === selectedCategory;
+        row.classList.toggle("email-row-hidden-by-category", !shouldShow);
+      });
+      updateCategoryFilterButtons(document);
+      updateDashboardMailStreamEmptyState();
+    };
+
+    function refreshDashboardMailRowsForFilter(filter) {
+      const dashboardMailFilter = document.getElementById("dashboardMailFilter");
+      const activeFilters = dashboardMailFilters();
+      if (window.applyCategoryFilter) {
+        window.applyCategoryFilter("__all__");
+      }
+      if (activeFilters.has(filter)) {
+        activeFilters.delete(filter);
+      } else if (filter) {
+        activeFilters.add(filter);
+      }
+      const orderedFilters = ["today", "urgent"].filter(function (item) {
+        return activeFilters.has(item);
+      });
+      if (dashboardMailFilter) {
+        dashboardMailFilter.value = orderedFilters.join(",");
+      }
+      updateDashboardMailFilterButtons();
+      applyDashboardMailStatFilter();
+    }
+
+    function dashboardHasPendingManualRoutes() {
+      return Boolean(document.querySelector("#dashboardMailRows [data-manual-route-button][data-manual-route-status='pending']"));
+    }
+
+    function scheduleManualRoutePoll(delayMs) {
+      window.clearTimeout(uiSyncState.manualRoutePollTimer);
+      if (!dashboardHasPendingManualRoutes()) return;
+      uiSyncState.manualRoutePollTimer = window.setTimeout(function () {
+        if (!dashboardHasPendingManualRoutes()) return;
+        refreshFragment(dashboardMailRowsUrl(), "#dashboardMailRows");
+      }, delayMs);
+    }
+
+    document.addEventListener("click", function (event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-dashboard-mail-filter-action]");
+      if (!button) return;
+      event.preventDefault();
+      refreshDashboardMailRowsForFilter(button.dataset.dashboardMailFilterAction || "");
+    });
+
+    document.addEventListener("click", function (event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-category-filter]");
+      if (!(button instanceof HTMLElement)) return;
+      event.preventDefault();
+      const dropdown = button.closest("[data-category-filter-select]");
+      const targetName = dropdown instanceof HTMLElement ? (dropdown.dataset.categoryFilterTarget || "dashboard") : "dashboard";
+      if (targetName === "inbox") {
+        const category = button.dataset.categoryFilter || "__all__";
+        const input = document.getElementById("categoryFilter");
+        if (input) input.value = category === "__all__" ? "" : category;
+        updateCategoryFilterButtons(document);
+        refreshInboxRows();
+      } else {
+        window.applyCategoryFilter(button.dataset.categoryFilter || "__all__");
+      }
+      if (dropdown instanceof HTMLDetailsElement) {
+        dropdown.open = false;
+      }
+    });
+
+    document.addEventListener("change", function (event) {
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement) || !target.matches("select[data-category-filter-select]")) return;
+      window.applyCategoryFilter(target.value || "__all__");
+    });
+
+    document.addEventListener("click", function (event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-mail-status-filter]");
+      if (!(button instanceof HTMLElement)) return;
+      event.preventDefault();
+      const status = button.dataset.mailStatusFilter || "";
+      const targetName = button.dataset.mailStatusTarget || "";
+      const inputId = targetName === "dashboard" ? "dashboardWorkStatusFilter" : "workStatusFilter";
+      const input = document.getElementById(inputId);
+      if (input) input.value = status;
+      updateMailStatusFilterButtons(button.closest(".mail-status-filter") || document);
+      if (targetName === "dashboard") {
+        refreshFragment(dashboardMailRowsUrl(), "#dashboardMailRows");
+      } else {
+        refreshFragment(inboxPanelUrlForStatus(status), "#main-panel");
+      }
+    });
+
+    document.body.addEventListener("htmx:afterSwap", function (event) {
+      updateMailStatusFilterButtons(event.detail.target);
+      updateCategoryFilterButtons(event.detail.target);
+      initDocumentTypeIconPickers(event.detail.target);
+      if (event.detail.target && event.detail.target.id === "dashboardMailRows" && window.applyCategoryFilter) {
+        window.applyCategoryFilter((window.categoryFilterState && window.categoryFilterState.activeCategory) || "__all__");
+      }
+      updateDashboardMailFilterButtons();
+      applyDashboardMailStatFilter();
+    });
+
+    function refreshInboxRows() {
+      const url = new URL("/ui/mail-rows", window.location.origin);
+      url.searchParams.set("view", "inbox");
+      const mailSearch = document.getElementById("mailSearch");
+      const categoryFilter = document.getElementById("categoryFilter");
+      const workStatusFilter = document.getElementById("workStatusFilter");
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (mailSearch && mailSearch.value) url.searchParams.set("q", mailSearch.value);
+      if (categoryFilter && categoryFilter.value) url.searchParams.set("category", categoryFilter.value);
+      if (workStatusFilter && workStatusFilter.value) url.searchParams.set("status", workStatusFilter.value);
+      if (selectedIndex && selectedIndex.value) url.searchParams.set("selected_email_index", selectedIndex.value);
+      if (selectedUid && selectedUid.value) url.searchParams.set("selected_email_uid", selectedUid.value);
+      refreshFragment(url.toString(), "#mailRows");
+    }
+
+    function refreshInboxDetail(selectedIndex, selectedUid) {
+      const uid = selectedUid || (document.getElementById("selectedEmailUid") || {}).value || "";
+      if (uid) {
+        refreshFragment(`/ui/emails/${encodeURIComponent(uid)}`, "#email-detail");
+        return;
+      }
+      if (selectedIndex === null || selectedIndex === undefined || selectedIndex === "") return;
+      refreshFragment(`/ui/emails/${selectedIndex}`, "#email-detail");
+    }
+
+    function refreshOpsRows() {
+      const rows = document.getElementById("opsRows");
+      if (!rows) return;
+      const url = new URL("/ui/monitoring-rows", window.location.origin);
+      const search = document.getElementById("opsSearch");
+      const category = document.getElementById("opsCategory");
+      const status = document.querySelector(".ops-filters input[name='status']");
+      if (search && search.value) url.searchParams.set("q", search.value);
+      if (category && category.value) url.searchParams.set("category", category.value);
+      if (status && status.value) url.searchParams.set("status", status.value);
+      refreshFragment(url.toString(), "#opsRows");
+    }
+
+    function refreshCurrentAssigneeWork() {
+      const view = document.querySelector("#main-panel .assignee-work-view");
+      if (!view) return;
+      const refreshButton = view.querySelector(".assignee-mail-panel-head .icon-btn[hx-get]");
+      const url = refreshButton ? refreshButton.getAttribute("hx-get") : "";
+      if (url) refreshFragment(url, "#main-panel");
+    }
+
+    function monitoringColumnStorageKey() {
+      return "coramail.monitoring.visibleColumns.v1";
+    }
+
+    function monitoringColumnWidthStorageKey() {
+      return "coramail.monitoring.columnWidths.v1";
+    }
+
+    function monitoringColumnOrderStorageKey() {
+      return "coramail.monitoring.columnOrder.v1";
+    }
+
+    function monitoringColumnOrderDefaults() {
+      return [
+        "health",
+        "subject",
+        "sender",
+        "business",
+        "assignee",
+        "received",
+        "attachment",
+        "summary",
+        "classification",
+        "decision",
+        "routing",
+        "forwarding",
+      ];
+    }
+
+    function monitoringColumnDefaults() {
+      return {
+        health: true,
+        subject: true,
+        sender: true,
+        business: true,
+        assignee: true,
+        received: true,
+        attachment: true,
+        summary: true,
+        classification: true,
+        decision: true,
+        routing: true,
+        forwarding: true,
+        control: true,
+      };
+    }
+
+    function monitoringColumnWidthDefaults() {
+      return {
+        health: 64,
+        subject: 450,
+        sender: 82,
+        business: 112,
+        assignee: 138,
+        received: 116,
+        attachment: 150,
+        summary: 150,
+        classification: 150,
+        decision: 184,
+        routing: 150,
+        forwarding: 150,
+      };
+    }
+
+    function readMonitoringColumns() {
+      const defaults = monitoringColumnDefaults();
+      try {
+        const raw = window.localStorage ? window.localStorage.getItem(monitoringColumnStorageKey()) : "";
+        const parsed = raw ? JSON.parse(raw) : {};
+        return Object.assign({}, defaults, parsed || {});
+      } catch (_) {
+        return defaults;
+      }
+    }
+
+    function saveMonitoringColumns(columns) {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(monitoringColumnStorageKey(), JSON.stringify(columns));
+        }
+      } catch (_) {}
+    }
+
+    function readMonitoringColumnWidths() {
+      const defaults = monitoringColumnWidthDefaults();
+      try {
+        const raw = window.localStorage ? window.localStorage.getItem(monitoringColumnWidthStorageKey()) : "";
+        const parsed = raw ? JSON.parse(raw) : {};
+        const widths = Object.assign({}, defaults);
+        Object.keys(parsed || {}).forEach(function (key) {
+          const width = Number(parsed[key]);
+          if (Number.isFinite(width)) {
+            widths[key] = Math.max(48, Math.min(720, Math.round(width)));
+          }
+        });
+        return widths;
+      } catch (_) {
+        return defaults;
+      }
+    }
+
+    function saveMonitoringColumnWidths(widths) {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(monitoringColumnWidthStorageKey(), JSON.stringify(widths));
+        }
+      } catch (_) {}
+    }
+
+    function readMonitoringColumnOrder() {
+      const defaults = monitoringColumnOrderDefaults();
+      try {
+        const raw = window.localStorage ? window.localStorage.getItem(monitoringColumnOrderStorageKey()) : "";
+        const parsed = raw ? JSON.parse(raw) : [];
+        const known = new Set(defaults);
+        const ordered = Array.isArray(parsed)
+          ? parsed.filter(function (key) { return known.has(key) && key !== "health"; })
+          : [];
+        defaults.forEach(function (key) {
+          if (key !== "health" && ordered.indexOf(key) === -1) {
+            ordered.push(key);
+          }
+        });
+        return ["health"].concat(ordered);
+      } catch (_) {
+        return defaults;
+      }
+    }
+
+    function saveMonitoringColumnOrder(order) {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(monitoringColumnOrderStorageKey(), JSON.stringify(order));
+        }
+      } catch (_) {}
+    }
+
+    function applyMonitoringColumnOrder(view) {
+      if (!view) return;
+      const table = view.querySelector(".ops-table");
+      if (!table) return;
+      const order = readMonitoringColumnOrder();
+      const appendOrdered = function (parent, selector) {
+        if (!parent) return;
+        order.forEach(function (key) {
+          const node = parent.querySelector(selector + "[data-monitoring-column='" + key + "']");
+          if (node) {
+            parent.appendChild(node);
+          }
+        });
+      };
+      appendOrdered(table.querySelector("colgroup"), "col");
+      appendOrdered(table.querySelector("thead tr"), "th");
+      table.querySelectorAll("tbody tr").forEach(function (row) {
+        appendOrdered(row, "td");
+      });
+    }
+
+    function applyMonitoringColumnWidths(view) {
+      if (!view) return;
+      const table = view.querySelector(".ops-table");
+      if (!table) return;
+      const visibleColumns = readMonitoringColumns();
+      const widths = readMonitoringColumnWidths();
+      let visibleWidth = 0;
+      table.querySelectorAll("col[data-monitoring-column]").forEach(function (col) {
+        const key = col.getAttribute("data-monitoring-column") || "";
+        const width = widths[key];
+        if (width) {
+          col.style.width = width + "px";
+          col.style.minWidth = width + "px";
+        }
+        if (visibleColumns[key] !== false && width) {
+          visibleWidth += width;
+        }
+      });
+      if (visibleWidth > 0) {
+        const wrap = table.closest(".ops-table-wrap");
+        const frameWidth = wrap ? Math.floor(wrap.clientWidth) : 0;
+        table.style.width = Math.max(visibleWidth, frameWidth) + "px";
+        table.style.minWidth = visibleWidth + "px";
+      }
+    }
+
+    function updateMonitoringTerminalColumn(view) {
+      if (!view) return;
+      const headers = Array.prototype.slice.call(view.querySelectorAll("th[data-monitoring-column]"));
+      headers.forEach(function (header) {
+        header.classList.remove("is-terminal-visible-column");
+      });
+      const visibleHeaders = headers.filter(function (header) {
+        return !header.hidden;
+      });
+      const terminalHeader = visibleHeaders[visibleHeaders.length - 1];
+      if (terminalHeader) {
+        terminalHeader.classList.add("is-terminal-visible-column");
+      }
+    }
+
+    function monitoringColumnWidthBounds(key) {
+      return {
+        min: key === "subject" ? 180 : key === "health" ? 48 : 72,
+        max: key === "subject" ? 720 : 360,
+      };
+    }
+
+    function nextVisibleMonitoringColumnKey(header) {
+      let next = header ? header.nextElementSibling : null;
+      while (next) {
+        if (next.matches && next.matches("th[data-monitoring-column]") && !next.hidden) {
+          return next.getAttribute("data-monitoring-column") || "";
+        }
+        next = next.nextElementSibling;
+      }
+      return "";
+    }
+
+    function applyMonitoringColumns(root) {
+      const scope = root && root.querySelector ? root : document;
+      const columns = readMonitoringColumns();
+      const view = scope.matches && scope.matches(".ops-view[data-view='monitoring']")
+        ? scope
+        : scope.querySelector(".ops-view[data-view='monitoring']");
+      applyMonitoringColumnOrder(view);
+      scope.querySelectorAll("[data-monitoring-column]").forEach(function (node) {
+        const key = node.getAttribute("data-monitoring-column") || "";
+        node.hidden = columns[key] === false;
+      });
+      scope.querySelectorAll("[data-monitoring-column-toggle]").forEach(function (input) {
+        const key = input.getAttribute("data-monitoring-column-toggle") || "";
+        input.checked = columns[key] !== false;
+      });
+      applyMonitoringColumnWidths(view);
+      updateMonitoringTerminalColumn(view);
+    }
+
+    function initMonitoringColumnResize(view) {
+      const table = view ? view.querySelector(".ops-table") : null;
+      if (!table) return;
+      view.querySelectorAll("[data-monitoring-column-resizer]").forEach(function (handle) {
+        if (handle.dataset.monitoringColumnResizeBound) return;
+        handle.dataset.monitoringColumnResizeBound = "true";
+        handle.addEventListener("pointerdown", function (event) {
+          if (event.button !== undefined && event.button !== 0) return;
+          const key = handle.getAttribute("data-monitoring-column-resizer") || "";
+          const header = handle.closest("th[data-monitoring-column]");
+          const col = table.querySelector("col[data-monitoring-column='" + key + "']");
+          if (header && header.classList.contains("is-terminal-visible-column")) return;
+          if (!key || !header || !col) return;
+          const nextKey = nextVisibleMonitoringColumnKey(header);
+          const nextCol = nextKey ? table.querySelector("col[data-monitoring-column='" + nextKey + "']") : null;
+          if (!nextKey || !nextCol) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const startX = event.clientX;
+          const startWidth = col.getBoundingClientRect().width || header.getBoundingClientRect().width;
+          const nextStartWidth = nextCol.getBoundingClientRect().width || startWidth;
+          const widths = readMonitoringColumnWidths();
+          const bounds = monitoringColumnWidthBounds(key);
+          const nextBounds = monitoringColumnWidthBounds(nextKey);
+          table.classList.add("is-column-resizing");
+          header.classList.add("is-resizing");
+          if (handle.setPointerCapture) {
+            try { handle.setPointerCapture(event.pointerId); } catch (_) {}
+          }
+          const onMove = function (moveEvent) {
+            const rawDelta = Math.round(moveEvent.clientX - startX);
+            const minDelta = Math.max(bounds.min - startWidth, nextStartWidth - nextBounds.max);
+            const maxDelta = Math.min(bounds.max - startWidth, nextStartWidth - nextBounds.min);
+            const delta = Math.max(minDelta, Math.min(maxDelta, rawDelta));
+            widths[key] = Math.round(startWidth + delta);
+            widths[nextKey] = Math.round(nextStartWidth - delta);
+            saveMonitoringColumnWidths(widths);
+            applyMonitoringColumnWidths(view);
+          };
+          const onEnd = function () {
+            table.classList.remove("is-column-resizing");
+            header.classList.remove("is-resizing");
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onEnd);
+            window.removeEventListener("pointercancel", onEnd);
+          };
+          window.addEventListener("pointermove", onMove);
+          window.addEventListener("pointerup", onEnd);
+          window.addEventListener("pointercancel", onEnd);
+        });
+      });
+    }
+
+    function initMonitoringColumnReorder(view) {
+      const table = view ? view.querySelector(".ops-table") : null;
+      if (!table) return;
+      view.querySelectorAll("th[data-monitoring-column]").forEach(function (header) {
+        if (header.dataset.monitoringColumnReorderBound) return;
+        header.dataset.monitoringColumnReorderBound = "true";
+        header.addEventListener("pointerdown", function (event) {
+          if (event.button !== undefined && event.button !== 0) return;
+          if (event.target && event.target.closest(".ops-column-resizer, button, a, input, select, summary, details, label")) return;
+          const key = header.getAttribute("data-monitoring-column") || "";
+          if (!key || key === "health") return;
+          let longPressTimer = 0;
+          let active = false;
+          let currentOrder = readMonitoringColumnOrder();
+          const startX = event.clientX;
+          const startY = event.clientY;
+          const clearLongPress = function () {
+            if (longPressTimer) {
+              window.clearTimeout(longPressTimer);
+              longPressTimer = 0;
+            }
+          };
+          const activate = function () {
+            active = true;
+            table.classList.add("is-column-reordering");
+            header.classList.add("is-reordering");
+          };
+          const onMove = function (moveEvent) {
+            if (!active) {
+              const moved = Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY);
+              if (moved > 8) {
+                clearLongPress();
+              }
+              return;
+            }
+            moveEvent.preventDefault();
+            const target = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+            const targetHeader = target ? target.closest("th[data-monitoring-column]") : null;
+            const targetKey = targetHeader ? targetHeader.getAttribute("data-monitoring-column") || "" : "";
+            if (!targetKey || targetKey === "health" || targetKey === key) return;
+            const fromIndex = currentOrder.indexOf(key);
+            const toIndex = currentOrder.indexOf(targetKey);
+            if (fromIndex <= 0 || toIndex <= 0 || fromIndex === toIndex) return;
+            currentOrder.splice(fromIndex, 1);
+            currentOrder.splice(toIndex, 0, key);
+            saveMonitoringColumnOrder(currentOrder);
+            applyMonitoringColumns(view);
+          };
+          const onEnd = function () {
+            clearLongPress();
+            if (active) {
+              table.classList.remove("is-column-reordering");
+              view.querySelectorAll("th.is-reordering").forEach(function (node) {
+                node.classList.remove("is-reordering");
+              });
+              saveMonitoringColumnOrder(currentOrder);
+            }
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onEnd);
+            window.removeEventListener("pointercancel", onEnd);
+          };
+          if (header.setPointerCapture) {
+            try { header.setPointerCapture(event.pointerId); } catch (_) {}
+          }
+          longPressTimer = window.setTimeout(activate, 320);
+          window.addEventListener("pointermove", onMove);
+          window.addEventListener("pointerup", onEnd);
+          window.addEventListener("pointercancel", onEnd);
+        });
+      });
+    }
+
+    function initMonitoringColumns(root) {
+      const scope = root && root.querySelector ? root : document;
+      const view = scope.querySelector(".ops-view[data-view='monitoring']");
+      if (!view) return;
+      applyMonitoringColumns(view);
+      initMonitoringColumnResize(view);
+      initMonitoringColumnReorder(view);
+      view.querySelectorAll("[data-monitoring-column-toggle]").forEach(function (input) {
+        if (input.dataset.monitoringColumnBound) return;
+        input.dataset.monitoringColumnBound = "true";
+        input.addEventListener("change", function () {
+          const columns = readMonitoringColumns();
+          const key = input.getAttribute("data-monitoring-column-toggle") || "";
+          columns[key] = input.checked;
+          saveMonitoringColumns(columns);
+          applyMonitoringColumns(view);
+          applyMonitoringColumnWidths(view);
+        });
+      });
+      view.querySelectorAll("[data-monitoring-bulk-action]").forEach(function (button) {
+        if (button.dataset.monitoringBulkBound) return;
+        button.dataset.monitoringBulkBound = "true";
+        button.addEventListener("click", function () {
+          const action = button.getAttribute("data-monitoring-bulk-action") || "";
+          const candidates = Array.prototype.slice.call(view.querySelectorAll("[data-monitoring-row-action]")).filter(function (rowButton) {
+            return rowButton.getAttribute("data-monitoring-row-action") === action && !rowButton.disabled;
+          });
+          if (!candidates.length) return;
+          const confirmMessage = button.getAttribute("data-monitoring-bulk-confirm") || "";
+          if (confirmMessage && !window.confirm(confirmMessage)) return;
+          candidates.forEach(function (rowButton) {
+            rowButton.click();
+          });
+        });
+      });
+    }
+
+    function openOpsInspector() {
+      const panel = document.getElementById("opsInspector");
+      if (!panel) return;
+      panel.hidden = false;
+      const view = panel.closest(".ops-view");
+      if (view) view.classList.add("has-inspector");
+    }
+
+    function closeOpsInspector() {
+      const panel = document.getElementById("opsInspector");
+      if (!panel) return;
+      panel.hidden = true;
+      panel.innerHTML = "";
+      const view = panel.closest(".ops-view");
+      if (view) view.classList.remove("has-inspector");
+      document.querySelectorAll(".ops-row.is-selected").forEach(function (row) {
+        row.classList.remove("is-selected");
+      });
+    }
+
+    function initOpsInteractions(root) {
+      const scope = root && root.querySelector ? root : document;
+      scope.querySelectorAll("[data-ops-inspector-open]").forEach(function (button) {
+        if (button.dataset.opsInspectorBound) return;
+        button.dataset.opsInspectorBound = "true";
+        button.addEventListener("click", function () {
+          document.querySelectorAll(".ops-row.is-selected").forEach(function (row) {
+            row.classList.remove("is-selected");
+          });
+          const row = button.closest(".ops-row");
+          if (row) row.classList.add("is-selected");
+        });
+      });
+      scope.querySelectorAll("[data-ops-inspector-close]").forEach(function (button) {
+        if (button.dataset.opsInspectorCloseBound) return;
+        button.dataset.opsInspectorCloseBound = "true";
+        button.addEventListener("click", closeOpsInspector);
+      });
+    }
+
+    function openAssigneeDetailDrawer() {
+      const panel = document.getElementById("assigneeEmailDetailDrawer");
+      if (!panel) return;
+      panel.hidden = false;
+      const view = panel.closest(".assignee-work-view");
+      if (view) view.classList.add("has-detail-drawer");
+    }
+
+    function closeAssigneeDetailDrawer() {
+      const panel = document.getElementById("assigneeEmailDetailDrawer");
+      if (!panel) return;
+      panel.hidden = true;
+      panel.innerHTML = "";
+      const view = panel.closest(".assignee-work-view");
+      if (view) view.classList.remove("has-detail-drawer");
+      document.querySelectorAll(".assignee-mail-table tr.is-selected").forEach(function (row) {
+        row.classList.remove("is-selected");
+      });
+    }
+
+    function initAssigneeDetailDrawerInteractions(root) {
+      const scope = root && root.querySelector ? root : document;
+      scope.querySelectorAll("[data-assignee-detail-open]").forEach(function (button) {
+        if (button.dataset.assigneeDetailBound) return;
+        button.dataset.assigneeDetailBound = "true";
+        button.addEventListener("click", function () {
+          document.querySelectorAll(".assignee-mail-table tr.is-selected").forEach(function (row) {
+            row.classList.remove("is-selected");
+          });
+          const row = button.closest("tr");
+          if (row) row.classList.add("is-selected");
+        });
+      });
+      scope.querySelectorAll("[data-assignee-detail-close]").forEach(function (button) {
+        if (button.dataset.assigneeDetailCloseBound) return;
+        button.dataset.assigneeDetailCloseBound = "true";
+        button.addEventListener("click", closeAssigneeDetailDrawer);
+      });
+    }
+
+    function openChatEmailDrawer() {
+      const panel = document.getElementById("chatEmailDetailDrawer");
+      if (!panel) return;
+      panel.hidden = false;
+      const view = panel.closest(".chats-view");
+      if (view) view.classList.add("has-chat-email-drawer");
+    }
+
+    function closeChatEmailDrawer() {
+      const panel = document.getElementById("chatEmailDetailDrawer");
+      if (!panel) return;
+      panel.hidden = true;
+      panel.innerHTML = "";
+      const view = panel.closest(".chats-view");
+      if (view) view.classList.remove("has-chat-email-drawer");
+    }
+
+    function renderChatEmailDrawerLoading(source) {
+      const panel = document.getElementById("chatEmailDetailDrawer");
+      if (!panel) return;
+      const wasClosed = panel.hidden;
+      const title = source && source.closest ? (source.closest(".chat-evidence-card")?.querySelector(".chat-evidence-source strong")?.textContent || "원본 메일") : "원본 메일";
+      panel.setAttribute("aria-busy", "true");
+      panel.innerHTML = `
+        <div class="assignee-detail-drawer-shell chat-email-drawer-shell">
+          <div class="assignee-detail-drawer-head chat-email-drawer-head">
+            <div>
+              <strong></strong>
+              <span>원본 메일을 불러오는 중</span>
+            </div>
+            <button type="button" class="icon-btn" title="닫기" aria-label="원본 메일 닫기" data-chat-email-drawer-close>
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="assignee-detail-drawer-body chat-email-drawer-body">
+            <div class="chat-email-drawer-loading">
+              <span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <strong>원본 메일 불러오는 중</strong>
+            </div>
+          </div>
+        </div>
+      `;
+      const titleNode = panel.querySelector(".chat-email-drawer-head strong");
+      if (titleNode) titleNode.textContent = title.trim() || "원본 메일";
+      openChatEmailDrawer();
+      if (wasClosed) playSideDrawerEnter(panel);
+      initChatEmailDrawerInteractions(panel);
+    }
+
+    function renderChatEmailDrawerError(status) {
+      const panel = document.getElementById("chatEmailDetailDrawer");
+      if (!panel) return;
+      panel.removeAttribute("aria-busy");
+      panel.innerHTML = `
+        <div class="assignee-detail-drawer-shell chat-email-drawer-shell">
+          <div class="assignee-detail-drawer-head chat-email-drawer-head">
+            <div>
+              <strong>원본 메일</strong>
+              <span>상세를 불러오지 못했습니다</span>
+            </div>
+            <button type="button" class="icon-btn" title="닫기" aria-label="원본 메일 닫기" data-chat-email-drawer-close>
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="assignee-detail-drawer-body chat-email-drawer-body">
+            <div class="notice danger">원본 메일을 불러오지 못했습니다.${status ? ` HTTP ${status}` : ""}</div>
+          </div>
+        </div>
+      `;
+      openChatEmailDrawer();
+      initChatEmailDrawerInteractions(panel);
+    }
+
+    function initChatEmailDrawerInteractions(root) {
+      const scope = root && root.querySelector ? root : document;
+      scope.querySelectorAll("[data-chat-email-drawer-close]").forEach(function (button) {
+        if (button.dataset.chatEmailDrawerCloseBound) return;
+        button.dataset.chatEmailDrawerCloseBound = "true";
+        button.addEventListener("click", closeChatEmailDrawer);
+      });
+    }
+
+    function closeTransientPopovers(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const popoverSelector = "details.ops-detail-menu[open], details.ops-column-menu[open], details[data-cc-popover][open]";
+      document.querySelectorAll(popoverSelector).forEach(function (details) {
+        const popoverSurface = details.querySelector(".ops-detail-popover, .ops-attachment-popover, .ops-column-popover, .detail-head-cc-popover");
+        if (popoverSurface && popoverSurface.contains(target)) return;
+        const summary = details.querySelector("summary");
+        if (summary && summary.contains(target)) return;
+        details.open = false;
+      });
+      const inspector = document.getElementById("opsInspector");
+      if (inspector && !inspector.hidden) {
+        if (inspector.contains(target)) return;
+        if (target.closest("[data-ops-inspector-open]")) return;
+        closeOpsInspector();
+      }
+      const assigneeDrawer = document.getElementById("assigneeEmailDetailDrawer");
+      if (assigneeDrawer && !assigneeDrawer.hidden) {
+        if (assigneeDrawer.contains(target)) return;
+        if (target.closest("[data-assignee-detail-open]")) return;
+        closeAssigneeDetailDrawer();
+      }
+      const chatEmailDrawer = document.getElementById("chatEmailDetailDrawer");
+      if (!chatEmailDrawer || chatEmailDrawer.hidden) return;
+      if (chatEmailDrawer.contains(target)) return;
+      if (target.closest("[data-chat-email-drawer-open]")) return;
+      closeChatEmailDrawer();
+    }
+
+    function resizeEmailBodyFrames(root) {
+      const scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll(".email-body-frame").forEach(function (frame) {
+        function applyHeight() {
+          try {
+            const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+            if (!doc) return;
+            const body = doc.body;
+            const html = doc.documentElement;
+            if (body) body.style.overflow = "hidden";
+            if (html) html.style.overflow = "hidden";
+            frame.style.height = "auto";
+            const height = Math.max(
+              body ? body.scrollHeight : 0,
+              body ? body.offsetHeight : 0,
+              html ? html.scrollHeight : 0,
+              html ? html.offsetHeight : 0,
+            );
+            if (height > 0) frame.style.height = `${height + 8}px`;
+          } catch (_) {}
+        }
+        if (frame.dataset.bodyFrameResizeBound !== "true") {
+          frame.dataset.bodyFrameResizeBound = "true";
+          frame.addEventListener("load", applyHeight);
+        }
+        try {
+          const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+          const body = doc && doc.body;
+          if (body && frame.dataset.bodyFrameResizeObserved !== "true" && "ResizeObserver" in window) {
+            frame.dataset.bodyFrameResizeObserved = "true";
+            const observer = new ResizeObserver(applyHeight);
+            observer.observe(body);
+          }
+        } catch (_) {}
+        applyHeight();
+        window.setTimeout(applyHeight, 80);
+        window.setTimeout(applyHeight, 300);
+      });
+    }
+
+    function parseDashboardChartData(rawValue, fallback) {
+      if (!rawValue) return fallback;
+      try {
+        return JSON.parse(rawValue);
+      } catch (error) {
+        console.warn("dashboard distribution data parse failed", error);
+        return fallback;
+      }
+    }
+
+    function ensureDashboardChartsReady() {
+      if (typeof Chart !== "undefined") {
+        return true;
+      }
+
+      const chartScript = document.getElementById("chartjs-cdn");
+      if (chartScript && !chartScript.dataset.dashboardRetryBound) {
+        chartScript.dataset.dashboardRetryBound = "true";
+        chartScript.addEventListener("load", function () {
+          initDashboardDistribution(document);
+          initDashboardCategoryTimeline(document);
+          initDashboardRoutingOverview(document);
+        }, { once: true });
+      }
+
+      console.warn("Chart.js가 아직 로드되지 않았습니다.");
+      return false;
+    }
+
+    function initDashboardDistribution(root) {
+      const scope = root && root.querySelector ? root : document;
+      const section = scope.querySelector("[data-dashboard-distribution]");
+      if (!section) return;
+
+      if (!ensureDashboardChartsReady()) {
+        return;
+      }
+
+      const canvas = section.querySelector("#categoryDonut");
+      const center = section.querySelector("#donutCenter");
+      const donutTooltip = section.querySelector("#categoryDonutTooltip");
+      if (!canvas) return;
+
+      if (window.categoryDonutChart) {
+        window.categoryDonutChart.destroy();
+        window.categoryDonutChart = null;
+      }
+
+      const categories = parseDashboardChartData(section.dataset.chartCategories, []);
+      const counts = parseDashboardChartData(section.dataset.chartCounts, {});
+      const palette = parseDashboardChartData(section.dataset.chartPalette, []);
+      const total = Number(section.dataset.chartTotal || 0);
+      const data = categories.map(function (category) {
+        return Number(counts[category] || 0);
+      });
+      const neutralCenterColor = "#000000";
+      const categoryColorMap = categories.reduce(function (acc, category, index) {
+        acc[category] = palette[index] || neutralCenterColor;
+        return acc;
+      }, {});
+
+      function syncDonutCenter(label, value, color) {
+        if (!center) return;
+
+        const strong = center.querySelector("strong");
+        const span = center.querySelector("span");
+        if (!strong || !span) return;
+
+        strong.textContent = `${value}건`;
+        strong.style.color = color || neutralCenterColor;
+        span.textContent = label;
+        span.style.color = color || neutralCenterColor;
+      }
+
+      function hideDonutTooltip() {
+        if (!donutTooltip) return;
+
+        donutTooltip.classList.remove("is-visible");
+        donutTooltip.setAttribute("aria-hidden", "true");
+      }
+
+      function renderDonutTooltip(context) {
+        if (!donutTooltip) return;
+
+        const tooltip = context.tooltip;
+        if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || tooltip.dataPoints.length === 0) {
+          hideDonutTooltip();
+          return;
+        }
+
+        const point = tooltip.dataPoints[0];
+        const value = Number(point.parsed || 0);
+        const currentTotal = Number(section.dataset.chartTotal || 0);
+        const pct = currentTotal ? Math.round(value / currentTotal * 100) : 0;
+        const label = point.label || "";
+
+        donutTooltip.replaceChildren();
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const detail = document.createElement("span");
+        detail.textContent = `${value}건 (${pct}%)`;
+        donutTooltip.append(title, detail);
+
+        const canvasRect = context.chart.canvas.getBoundingClientRect();
+        const centerX = canvas.offsetLeft + canvas.offsetWidth / 2;
+        const centerY = canvas.offsetTop + canvas.offsetHeight / 2;
+        const caretX = canvas.offsetLeft + (tooltip.caretX || canvas.width / 2) * (canvasRect.width / context.chart.width);
+        const caretY = canvas.offsetTop + (tooltip.caretY || canvas.height / 2) * (canvasRect.height / context.chart.height);
+        const dy = caretY - centerY;
+
+        donutTooltip.classList.add("is-visible");
+        donutTooltip.setAttribute("aria-hidden", "false");
+
+        const tooltipWidth = donutTooltip.offsetWidth;
+        const edgeGap = 8;
+        const minLeft = edgeGap + tooltipWidth / 2;
+        const maxLeft = donutTooltip.parentElement.offsetWidth - edgeGap - tooltipWidth / 2;
+        const left = Math.min(Math.max(caretX, minLeft), maxLeft);
+        const top = dy >= 0
+          ? donutTooltip.parentElement.offsetHeight - edgeGap
+          : edgeGap;
+        const transform = dy >= 0 ? "translate(-50%, -100%)" : "translate(-50%, 0)";
+
+        donutTooltip.style.left = `${left}px`;
+        donutTooltip.style.top = `${top}px`;
+        donutTooltip.style.transform = transform;
+      }
+
+      syncDonutCenter("전체", total, neutralCenterColor);
+
+      window.categoryDonutChart = new Chart(canvas, {
+        type: "doughnut",
+        data: {
+          labels: categories,
+          datasets: [{
+            data: data,
+            backgroundColor: palette.slice(0, categories.length),
+            borderColor: "#ffffff",
+            borderWidth: 4,
+            hoverOffset: 8,
+            spacing: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "72%",
+          radius: "92%",
+          animation: {
+            duration: 600,
+            easing: "easeOutQuart"
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              enabled: false,
+              displayColors: false,
+              external: renderDonutTooltip,
+              callbacks: {
+                label: function (ctx) {
+                  const value = ctx.parsed || 0;
+                  const currentTotal = Number(section.dataset.chartTotal || 0);
+                  const pct = currentTotal ? Math.round(value / currentTotal * 100) : 0;
+                  return ` ${ctx.label}: ${value}건 (${pct}%)`;
+                }
+              }
+            }
+          },
+          onHover: function (_, elements) {
+            if (elements.length > 0) {
+              const hoveredIndex = elements[0].index;
+              const hoveredCategory = categories[hoveredIndex];
+              const currentData = window.categoryDonutChart ? window.categoryDonutChart.data.datasets[0].data : data;
+              syncDonutCenter(hoveredCategory, currentData[hoveredIndex] || 0, categoryColorMap[hoveredCategory]);
+              return;
+            }
+
+            syncDonutCenter(
+              window.dashboardDistributionScope === "all" ? "전체" : "오늘",
+              Number(section.dataset.chartTotal || 0),
+              neutralCenterColor
+            );
+          }
+        }
+      });
+
+      function applyDistributionScope(nextScope) {
+        const scopeName = nextScope === "all" ? "all" : "today";
+        window.dashboardDistributionScope = scopeName;
+        const scopedCounts = parseDashboardChartData(
+          scopeName === "all" ? section.dataset.chartCountsAll : section.dataset.chartCountsToday,
+          {}
+        );
+        const scopedTotal = Number(
+          scopeName === "all" ? section.dataset.chartTotalAll || 0 : section.dataset.chartTotalToday || 0
+        );
+        const scopedData = categories.map(function (category) {
+          return Number(scopedCounts[category] || 0);
+        });
+
+        section.dataset.chartCounts = JSON.stringify(scopedCounts);
+        section.dataset.chartTotal = String(scopedTotal);
+
+        if (window.categoryDonutChart) {
+          window.categoryDonutChart.data.datasets[0].data = scopedData;
+          window.categoryDonutChart.update();
+        }
+        syncDonutCenter(scopeName === "all" ? "전체" : "오늘", scopedTotal, neutralCenterColor);
+
+        section.querySelectorAll("[data-dashboard-distribution-list]").forEach(function (list) {
+          list.classList.toggle("is-hidden", list.dataset.dashboardDistributionList !== scopeName);
+        });
+        section.querySelectorAll("[data-dashboard-distribution-scope]").forEach(function (button) {
+          const isActive = button.dataset.dashboardDistributionScope === scopeName;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+      }
+
+      section.querySelectorAll("[data-dashboard-distribution-scope]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          applyDistributionScope(button.dataset.dashboardDistributionScope || "today");
+        });
+      });
+      applyDistributionScope(window.dashboardDistributionScope || "today");
+    }
+
+    function initDashboardCategoryTimeline(root) {
+      const scope = root && root.querySelector ? root : document;
+      const section = scope.querySelector("[data-dashboard-category-timeline]");
+      if (!section) return;
+
+      window.categoryTimelineState = window.categoryTimelineState || {
+        hiddenCategories: {}
+      };
+
+      if (window.categoryTimelineChart) {
+        window.categoryTimelineChart.destroy();
+        window.categoryTimelineChart = null;
+      }
+
+      if (!ensureDashboardChartsReady()) {
+        return;
+      }
+
+      const categories = parseDashboardChartData(section.dataset.chartCategories, []);
+      const palette = parseDashboardChartData(section.dataset.chartPalette, []);
+      const timelineLabels = parseDashboardChartData(section.dataset.chartTimelineLabels, []);
+      const timelineDatasets = parseDashboardChartData(section.dataset.chartTimelineDatasets, {});
+      const timelineCanvas = section.querySelector("#categoryTimeline");
+
+      if (!timelineCanvas || !timelineLabels.length) {
+        return;
+      }
+
+      function syncTimelineLegendButtons() {
+        section.querySelectorAll("[data-timeline-category-toggle]").forEach(function (button) {
+          const category = button.dataset.timelineCategoryToggle || "";
+          const isVisible = !window.categoryTimelineState.hiddenCategories[category];
+          button.classList.toggle("is-inactive", !isVisible);
+          button.setAttribute("aria-pressed", isVisible ? "true" : "false");
+        });
+      }
+
+      const timelineSeries = categories.map(function (category, index) {
+        return {
+          label: category,
+          data: Array.isArray(timelineDatasets[category]) ? timelineDatasets[category] : [],
+          backgroundColor: `${palette[index]}33`,
+          borderColor: palette[index],
+          borderWidth: 1.5,
+          borderRadius: 0,
+          borderSkipped: false,
+          maxBarThickness: 18,
+          categoryPercentage: 0.7,
+          barPercentage: 0.9
+        };
+      });
+
+      window.categoryTimelineChart = new Chart(timelineCanvas, {
+        type: "bar",
+        data: {
+          labels: timelineLabels,
+          datasets: timelineSeries
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          layout: {
+            padding: { left: 0, right: 8, top: 6, bottom: 0 }
+          },
+          scales: {
+            x: {
+              stacked: false,
+              grid: {
+                display: false,
+                drawBorder: false
+              },
+              ticks: {
+                color: "#526273",
+                font: {
+                  size: 13,
+                  weight: 700
+                }
+              }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0,
+                color: "#7a8796",
+                font: {
+                  size: 11
+                }
+              },
+              grid: {
+                color: "rgba(11, 79, 168, 0.08)",
+                drawBorder: false
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              backgroundColor: "#17324d",
+              padding: 10,
+              cornerRadius: 10,
+              callbacks: {
+                label: function (ctx) {
+                  return ` ${ctx.dataset.label}: ${ctx.parsed.y}건`;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      categories.forEach(function (category, index) {
+        const isVisible = !window.categoryTimelineState.hiddenCategories[category];
+        window.categoryTimelineChart.setDatasetVisibility(index, isVisible);
+      });
+      window.categoryTimelineChart.update();
+      syncTimelineLegendButtons();
+
+      if (!window.__categoryTimelineLegendBound) {
+        window.__categoryTimelineLegendBound = true;
+        document.addEventListener("click", function (event) {
+          const button = event.target.closest("[data-timeline-category-toggle]");
+          if (!button) return;
+
+          const category = button.dataset.timelineCategoryToggle || "";
+          if (!category) return;
+
+          event.preventDefault();
+          window.categoryTimelineState = window.categoryTimelineState || { hiddenCategories: {} };
+          const hiddenCategories = window.categoryTimelineState.hiddenCategories || {};
+          hiddenCategories[category] = !hiddenCategories[category];
+          window.categoryTimelineState.hiddenCategories = hiddenCategories;
+
+          if (window.categoryTimelineChart) {
+            const chartIndex = window.categoryTimelineChart.data.datasets.findIndex(function (dataset) {
+              return dataset.label === category;
+            });
+            if (chartIndex >= 0) {
+              window.categoryTimelineChart.setDatasetVisibility(chartIndex, !hiddenCategories[category]);
+              window.categoryTimelineChart.update();
+            }
+          }
+
+          document.querySelectorAll("[data-timeline-category-toggle]").forEach(function (item) {
+            const itemCategory = item.dataset.timelineCategoryToggle || "";
+            const isVisible = !hiddenCategories[itemCategory];
+            item.classList.toggle("is-inactive", !isVisible);
+            item.setAttribute("aria-pressed", isVisible ? "true" : "false");
+          });
+        });
+      }
+    }
+
+    function initDashboardRoutingOverview(root) {
+      const scope = root && root.querySelector ? root : document;
+      const section = scope.querySelector("[data-dashboard-routing-overview]");
+      if (!section) return;
+
+      function applyRoutingScope(nextScope) {
+        const scopeName = nextScope === "all" ? "all" : "today";
+        window.dashboardRoutingScope = scopeName;
+        let activeTotal = 0;
+        section.querySelectorAll("[data-dashboard-routing-panel]").forEach(function (panel) {
+          const isActivePanel = panel.dataset.dashboardRoutingPanel === scopeName;
+          panel.classList.toggle("is-hidden", !isActivePanel);
+          if (isActivePanel) {
+            activeTotal = Number(panel.dataset.dashboardRoutingTotal || 0);
+          }
+        });
+        section.querySelectorAll("[data-dashboard-routing-scope]").forEach(function (button) {
+          const isActive = button.dataset.dashboardRoutingScope === scopeName;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+        const totalLabel = section.querySelector("[data-dashboard-routing-scope-total]");
+        if (totalLabel) {
+          totalLabel.textContent = `총 ${activeTotal}건`;
+        }
+      }
+
+      section.querySelectorAll("[data-dashboard-routing-scope]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          applyRoutingScope(button.dataset.dashboardRoutingScope || "today");
+        });
+      });
+      applyRoutingScope(window.dashboardRoutingScope || "today");
+
+      if (!ensureDashboardChartsReady()) {
+        return;
+      }
+
+      const canvas = section.querySelector("#routingOverviewChart");
+      if (!canvas) return;
+
+      if (window.routingOverviewChart) {
+        window.routingOverviewChart.destroy();
+        window.routingOverviewChart = null;
+      }
+
+      const labels = parseDashboardChartData(section.dataset.routeLabels, []);
+      const counts = parseDashboardChartData(section.dataset.routeCounts, {});
+      const palette = parseDashboardChartData(section.dataset.routePalette, []);
+      const total = Number(section.dataset.routeTotal || 0);
+      const data = labels.map(function (label) {
+        return Number(counts[label] || 0);
+      });
+
+      window.routingOverviewChart = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: palette.slice(0, labels.length),
+            borderRadius: 999,
+            borderSkipped: false,
+            barThickness: 10,
+            maxBarThickness: 10,
+            categoryPercentage: 0.72,
+            barPercentage: 0.92
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: "y",
+          animation: false,
+          layout: {
+            padding: { left: 2, right: 6, top: 2, bottom: 2 }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  const value = ctx.parsed.x || 0;
+                  const pct = total ? Math.round(value / total * 100) : 0;
+                  return ` ${ctx.label}: ${value}건 (${pct}%)`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              display: false,
+              grid: {
+                display: false
+              },
+              ticks: {
+                precision: 0,
+                color: "#64748B"
+              }
+            },
+            y: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                color: "#526273",
+                font: {
+                  size: 11,
+                  weight: 700
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function applyDashboardState(state) {
+      const previous = uiSyncState.versions;
+      const next = state.versions || {};
+      if (previous.stats && previous.stats !== next.stats) {
+        refreshFragment("/ui/stats", "#stats");
+      }
+      if (previous.distribution && previous.distribution !== next.distribution) {
+        refreshFragment("/ui/dashboard-distribution", "#dashboardDistribution");
+      }
+      if (previous.category_timeline && previous.category_timeline !== next.category_timeline) {
+        refreshFragment("/ui/dashboard-category-timeline", "#dashboardCategoryTimeline");
+      }
+      if (previous.routing_overview && previous.routing_overview !== next.routing_overview) {
+        refreshFragment("/ui/dashboard-routing-overview", "#dashboardRoutingOverview");
+      }
+      if (previous.mail_rows && previous.mail_rows !== next.mail_rows) {
+        refreshFragment(dashboardMailRowsUrl(), "#dashboardMailRows");
+      }
+      uiSyncState.versions = next;
+    }
+
+    function applyInboxState(state) {
+      const previous = uiSyncState.versions;
+      const next = state.versions || {};
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (selectedIndex && state.selected_email_index !== null && state.selected_email_index !== undefined) {
+        selectedIndex.value = String(state.selected_email_index);
+      }
+      if (selectedUid && state.selected_email_uid) {
+        selectedUid.value = state.selected_email_uid;
+      }
+
+      if (previous.mail_rows && previous.mail_rows !== next.mail_rows) {
+        refreshInboxRows();
+      }
+      if (previous.detail && previous.detail !== next.detail) {
+        const stateUid = state.selected_email_uid || (selectedUid && selectedUid.value) || "";
+        const currentUid = currentDetailUid();
+        if (uiSyncState.detailRequestUid && stateUid === uiSyncState.detailRequestUid) {
+          // The click request is already loading this detail; avoid a duplicate poll refresh.
+        } else if (uiSyncState.detailRequestNeedsVersionSync && stateUid && stateUid === currentUid) {
+          uiSyncState.detailRequestNeedsVersionSync = false;
+        } else {
+          refreshInboxDetail(state.selected_email_index, state.selected_email_uid);
+        }
+      }
+      uiSyncState.versions = next;
+    }
+
+    function applyMonitoringState(state) {
+      const previous = uiSyncState.versions;
+      const next = state.versions || {};
+      if (previous.monitoring_rows && previous.monitoring_rows !== next.monitoring_rows) {
+        refreshOpsRows();
+      }
+      uiSyncState.versions = next;
+    }
+
+    function scheduleUiPoll(delayMs) {
+      window.clearTimeout(uiSyncState.timer);
+      uiSyncState.timer = window.setTimeout(runUiPoll, delayMs);
+    }
+
+    async function runUiPoll() {
+      const view = currentUiView();
+      if (!view) {
+        scheduleUiPoll(10000);
+        return;
+      }
+
+      const url = view === "dashboard"
+        ? dashboardStateUrl()
+        : view === "monitoring"
+          ? monitoringStateUrl()
+          : view === "documents"
+            ? documentsStateUrl()
+            : inboxStateUrl();
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error(`ui state ${response.status}`);
+        const state = await response.json();
+        if (uiSyncState.view !== view || !uiSyncState.versions || Object.keys(uiSyncState.versions).length === 0) {
+          uiSyncState.view = view;
+          uiSyncState.versions = state.versions || {};
+        } else if (view === "dashboard") {
+          applyDashboardState(state);
+        } else if (view === "documents") {
+          if (uiSyncState.versions.document_sections && state.versions && uiSyncState.versions.document_sections !== state.versions.document_sections) {
+            const sectionsUrl = new URL("/ui/document-type-sections", window.location.origin);
+            refreshFragment(sectionsUrl.toString(), "#documentTypeSections");
+          }
+          uiSyncState.versions = state.versions || {};
+        } else if (view === "monitoring") {
+          applyMonitoringState(state);
+        } else {
+          applyInboxState(state);
+        }
+      } catch (error) {
+        console.warn("UI sync poll failed", error);
+      } finally {
+        scheduleUiPoll(view === "documents" ? 10000 : isDetailProgressActive() ? 1000 : 1500);
+      }
+    }
+
+    function resetUiSync() {
+      uiSyncState.view = currentUiView();
+      uiSyncState.versions = {};
+      scheduleUiPoll(1200);
+    }
+
+    function nudgeUiSync(delayMs) {
+      uiSyncState.view = currentUiView();
+      scheduleUiPoll(delayMs || 1200);
+    }
+
+    async function checkClientVersion() {
+      try {
+        const response = await fetch("/api/client-version", {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (payload.version && payload.version !== uiSyncState.assetVersion) {
+          window.location.reload();
+        }
+      } catch (error) {
+        console.warn("client version check failed", error);
+      }
+    }
+
+    {% if not demo_mode %}
+    function gmailSettingsModal() {
+      return document.getElementById("gmailSettingsModal");
+    }
+
+    async function refreshGmailSettingsPanel() {
+      const modal = gmailSettingsModal();
+      if (!modal) return;
+      const body = modal.querySelector(".gmail-settings-dialog-body");
+      if (!body) return;
+      try {
+        const response = await fetch("{{ mail_settings_panel_url }}", {
+          headers: { Accept: "text/html" },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        body.innerHTML = await response.text();
+        if (window.htmx) htmx.process(body);
+        const accountLabel = body.querySelector("#gmailSyncSettings")?.dataset.gmailAccountLabel;
+        const bannerValue = document.querySelector("[data-gmail-settings-open] .gmail-account-value");
+        if (accountLabel && bannerValue) bannerValue.textContent = accountLabel;
+      } catch (error) {
+        console.warn("Gmail settings refresh failed", error);
+      }
+    }
+
+    async function openGmailSettingsModal() {
+      const modal = gmailSettingsModal();
+      if (!modal) return;
+      await refreshGmailSettingsPanel();
+      modal.hidden = false;
+      document.body.classList.add("gmail-settings-open");
+      const dialog = modal.querySelector(".gmail-settings-dialog");
+      if (dialog) dialog.focus({ preventScroll: true });
+    }
+
+    function closeGmailSettingsModal() {
+      const modal = gmailSettingsModal();
+      if (!modal) return;
+      modal.hidden = true;
+      document.body.classList.remove("gmail-settings-open");
+      const trigger = document.querySelector("[data-gmail-settings-open]");
+      if (trigger) trigger.focus({ preventScroll: true });
+    }
+
+    document.addEventListener("pointerdown", closeTransientPopovers, true);
+
+    document.body.addEventListener("click", function (event) {
+      const openTrigger = event.target.closest("[data-gmail-settings-open]");
+      if (openTrigger) {
+        openGmailSettingsModal();
+        return;
+      }
+      const setupTrigger = event.target.closest("[data-gmail-open-advanced]");
+      if (setupTrigger) {
+        const advanced = document.querySelector(".gmail-advanced-setup");
+        if (advanced) advanced.open = true;
+        const input = document.getElementById("gmailClientConfigJson");
+        if (input) input.focus({ preventScroll: false });
+        return;
+      }
+      if (event.target.closest("[data-gmail-settings-close]")) {
+        closeGmailSettingsModal();
+      }
+    });
+
+    document.addEventListener("keydown", function (event) {
+      const modal = gmailSettingsModal();
+      if (event.key === "Escape" && modal && !modal.hidden) {
+        closeGmailSettingsModal();
+      }
+    });
+    {% endif %}
+
+    function manualRouteConfirmModal() {
+      return document.getElementById("manualRouteConfirmModal");
+    }
+
+    function actionConfirmConfig(source) {
+      if (source instanceof HTMLElement && source.matches("[data-work-complete-button]")) {
+        return {
+          eyebrow: "업무 처리",
+          title: "업무를 완료할까요?",
+          message: "이 업무를 완료 처리하시겠습니까?",
+          icon: "task_alt",
+          submitLabel: "업무 완료",
+        };
+      }
+      if (source instanceof HTMLElement && source.matches("[data-mail-delete-button]")) {
+        return {
+          eyebrow: "",
+          title: "메일을 삭제할까요?",
+          message: "이 메일을 Gmail 휴지통으로 이동하시겠습니까?",
+          icon: "delete",
+          submitLabel: "삭제",
+          variant: "danger",
+        };
+      }
+      return {
+        eyebrow: "수동 라우팅",
+        title: "담당자에게 전달할까요?",
+        message: "이 메일을 현재 담당자에게 수동 라우팅하시겠습니까?",
+        icon: "forward_to_inbox",
+        submitLabel: "전달",
+      };
+    }
+
+    function openManualRouteConfirm(source, message, issueRequest) {
+      const modal = manualRouteConfirmModal();
+      if (!modal) return;
+      const config = actionConfirmConfig(source);
+      manualRouteConfirmState.issueRequest = issueRequest;
+      manualRouteConfirmState.trigger = source;
+      const eyebrowNode = modal.querySelector("#manualRouteConfirmEyebrow");
+      const titleNode = modal.querySelector("#manualRouteConfirmTitle");
+      const messageNode = modal.querySelector("#manualRouteConfirmMessage");
+      const iconNode = modal.querySelector("[data-action-confirm-icon]");
+      const submitIconNode = modal.querySelector("[data-action-confirm-submit-icon]");
+      const submitLabelNode = modal.querySelector("[data-action-confirm-submit-label]");
+      const dialog = modal.querySelector(".manual-route-confirm-dialog");
+      if (eyebrowNode) eyebrowNode.textContent = config.eyebrow;
+      if (eyebrowNode) eyebrowNode.hidden = !config.eyebrow;
+      if (titleNode) titleNode.textContent = config.title;
+      if (messageNode) messageNode.textContent = message || config.message;
+      if (iconNode) iconNode.textContent = config.icon;
+      if (submitIconNode) submitIconNode.textContent = config.icon;
+      if (submitLabelNode) submitLabelNode.textContent = config.submitLabel;
+      if (dialog) dialog.classList.toggle("is-danger", config.variant === "danger");
+      modal.hidden = false;
+      document.body.classList.add("manual-route-confirm-open");
+      const primary = modal.querySelector("[data-manual-route-confirm-submit]");
+      if (primary) {
+        primary.focus({ preventScroll: true });
+      } else if (dialog) {
+        dialog.focus({ preventScroll: true });
+      }
+    }
+
+    function closeManualRouteConfirm(options) {
+      const modal = manualRouteConfirmModal();
+      if (!modal) return;
+      const restoreFocus = !options || options.restoreFocus !== false;
+      const dialog = modal.querySelector(".manual-route-confirm-dialog");
+      if (dialog) dialog.classList.remove("is-danger");
+      modal.hidden = true;
+      document.body.classList.remove("manual-route-confirm-open");
+      const trigger = manualRouteConfirmState.trigger;
+      manualRouteConfirmState.issueRequest = null;
+      manualRouteConfirmState.trigger = null;
+      if (restoreFocus && trigger instanceof HTMLElement) {
+        trigger.focus({ preventScroll: true });
+      }
+    }
+
+    document.body.addEventListener("htmx:confirm", function (event) {
+      const source = event.detail && event.detail.elt;
+      if (
+        !(source instanceof HTMLElement) ||
+        !source.matches("[data-manual-route-button], [data-work-complete-button], [data-mail-delete-button]")
+      ) return;
+      event.preventDefault();
+      openManualRouteConfirm(source, event.detail.question, event.detail.issueRequest);
+    });
+
+    document.body.addEventListener("click", function (event) {
+      const modal = manualRouteConfirmModal();
+      if (!modal || modal.hidden) return;
+      if (event.target.closest("[data-manual-route-confirm-submit]")) {
+        const issueRequest = manualRouteConfirmState.issueRequest;
+        closeManualRouteConfirm({ restoreFocus: false });
+        if (typeof issueRequest === "function") issueRequest(true);
+        return;
+      }
+      if (event.target.closest("[data-manual-route-confirm-cancel]")) {
+        closeManualRouteConfirm();
+      }
+    });
+
+    document.addEventListener("keydown", function (event) {
+      const modal = manualRouteConfirmModal();
+      if (event.key === "Escape" && modal && !modal.hidden) {
+        closeManualRouteConfirm();
+      }
+      if (event.key === "Escape") {
+        const inspector = document.getElementById("opsInspector");
+        if (inspector && !inspector.hidden) {
+          closeOpsInspector();
+        }
+        const assigneeDrawer = document.getElementById("assigneeEmailDetailDrawer");
+        if (assigneeDrawer && !assigneeDrawer.hidden) {
+          closeAssigneeDetailDrawer();
+        }
+        const chatEmailDrawer = document.getElementById("chatEmailDetailDrawer");
+        if (chatEmailDrawer && !chatEmailDrawer.hidden) {
+          closeChatEmailDrawer();
+        }
+      }
+    });
+
+    document.body.addEventListener("htmx:beforeSwap", function (event) {
+      if (["email-detail", "main-panel"].includes(event.detail.target.id)) {
+        storeAttachmentOpenState();
+      }
+    });
+
+    document.body.addEventListener("htmx:afterSwap", function (event) {
+      installResponsiveHtmxControls(event.detail.target);
+      initDocumentTypeIconPickers(event.detail.target);
+      hydrateChatSessionInputs(event.detail.target);
+
+      if (event.detail.target.id === "main-panel") {
+        const requestPath = event.detail.requestConfig.path || "";
+        const requestUrl = new URL(requestPath, window.location.origin);
+        setActiveMainNav(navButtonForPath(requestUrl.pathname));
+      }
+
+      if (["main-panel", "email-detail", "mailRows"].includes(event.detail.target.id)) {
+        limitInboxRows();
+        if (event.detail.target.id === "email-detail") {
+          event.detail.target.removeAttribute("aria-busy");
+          if (uiSyncState.detailRequestUid && currentDetailUid() === uiSyncState.detailRequestUid) {
+            uiSyncState.detailRequestNeedsVersionSync = true;
+            uiSyncState.detailRequestUid = "";
+          }
+        }
+        syncInboxSelection();
+        restoreAttachmentOpenState();
+        resizeEmailBodyFrames(event.detail.target);
+        initClassificationProgressForCurrentDetail();
+        initSummaryProgressForCurrentDetail();
+        initAttachmentProgressForCurrentDetail();
+      }
+
+      if (event.detail.target.id === "chat-results-body") {
+        playChatTurnEnter(event.detail.target);
+      }
+
+      if (["main-panel", "opsRows"].includes(event.detail.target.id)) {
+        initMonitoringColumns(document);
+        initOpsInteractions(document);
+      }
+
+      if (event.detail.target.id === "main-panel") {
+        initAssigneeDetailDrawerInteractions(document);
+        initChatEmailDrawerInteractions(document);
+      }
+
+      if (event.detail.target.id === "opsInspector") {
+        const wasClosed = event.detail.target.hidden;
+        openOpsInspector();
+        if (wasClosed) playSideDrawerEnter(event.detail.target);
+        initOpsInteractions(event.detail.target);
+        restoreAttachmentOpenState();
+        resizeEmailBodyFrames(event.detail.target);
+        initClassificationProgressForCurrentDetail();
+        initSummaryProgressForCurrentDetail();
+        initAttachmentProgressForCurrentDetail();
+      }
+
+      if (event.detail.target.id === "assigneeEmailDetailDrawer") {
+        const wasClosed = event.detail.target.hidden;
+        openAssigneeDetailDrawer();
+        if (wasClosed) playSideDrawerEnter(event.detail.target);
+        initAssigneeDetailDrawerInteractions(event.detail.target);
+        restoreAttachmentOpenState();
+        resizeEmailBodyFrames(event.detail.target);
+        initClassificationProgressForCurrentDetail();
+        initSummaryProgressForCurrentDetail();
+        initAttachmentProgressForCurrentDetail();
+      }
+
+      if (event.detail.target.id === "chatEmailDetailDrawer") {
+        const wasClosed = event.detail.target.hidden;
+        event.detail.target.removeAttribute("aria-busy");
+        openChatEmailDrawer();
+        if (wasClosed) playSideDrawerEnter(event.detail.target);
+        initChatEmailDrawerInteractions(event.detail.target);
+        restoreAttachmentOpenState();
+        resizeEmailBodyFrames(event.detail.target);
+        initClassificationProgressForCurrentDetail();
+        initSummaryProgressForCurrentDetail();
+        initAttachmentProgressForCurrentDetail();
+      }
+
+      if (["main-panel", "dashboardDistribution", "dashboardCategoryTimeline", "dashboardRoutingOverview"].includes(event.detail.target.id)) {
+        initDashboardDistribution(event.detail.target);
+        initDashboardCategoryTimeline(event.detail.target);
+        initDashboardRoutingOverview(event.detail.target);
+      }
+
+      if (event.detail.target.id === "main-panel") {
+        const requestPath = event.detail.requestConfig.path || "";
+        setMainNavigationBusy(false);
+        activateMainView(requestPath);
+        syncPageTitle();
+        syncTopbarActions();
+        syncDashboardViewportMode();
+        scheduleManualRoutePoll(1500);
+        cacheCurrentDemoMainView();
+      }
+
+      if (event.detail.target.id === "main-panel") {
+        resetUiSync();
+      } else if (["email-detail", "mailRows", "opsRows", "opsInspector", "chatEmailDetailDrawer", "dashboardMailRows", "stats", "dashboardDistribution", "dashboardCategoryTimeline", "dashboardRoutingOverview"].includes(event.detail.target.id)) {
+        nudgeUiSync(1200);
+      }
+      if (event.detail.target.id === "dashboardMailRows") {
+        scheduleManualRoutePoll(1500);
+      }
+
+    });
+
+    syncPageTitle();
+    syncTopbarActions();
+    syncDashboardViewportMode();
+    initDocumentTypeIconPickers(document);
+    window.addEventListener("resize", syncDocumentsViewportLayout);
+
+    document.body.addEventListener("click", function (event) {
+      const option = event.target.closest(".document-type-icon-option");
+      if (!option) return;
+      const card = option.closest(".document-type-card");
+      if (!card) return;
+      const documentType = option.dataset.documentType || card.dataset.documentType || "";
+      const icon = option.dataset.documentIcon || "";
+      if (!documentType || !documentTypeIconOptions.includes(icon)) return;
+      storeDocumentTypeIcon(documentType, icon);
+      setDocumentTypeIcon(card, icon);
+      const picker = option.closest(".document-type-icon-picker");
+      if (picker) picker.removeAttribute("open");
+    });
+
+    document.body.addEventListener("routing-settings-updated", function () {
+      const summaryPanel = document.getElementById("routingSummaryPanel");
+      if (!window.htmx) return;
+      if (summaryPanel) {
+        htmx.ajax("GET", "/ui/settings/routing-summary", { target: summaryPanel, swap: "outerHTML" });
+      }
+      const routingOverview = document.getElementById("dashboardRoutingOverview");
+      if (routingOverview) {
+        htmx.ajax("GET", "/ui/dashboard-routing-overview", { target: routingOverview, swap: "outerHTML" });
+      }
+      const dashboardRows = document.getElementById("dashboardMailRows");
+      if (dashboardRows) {
+        htmx.ajax("GET", "/ui/dashboard-mail-rows", { target: dashboardRows, swap: "innerHTML" });
+      }
+      const inboxRows = document.getElementById("mailRows");
+      if (inboxRows) {
+        htmx.ajax("POST", "/ui/mail-rows", { target: inboxRows, swap: "innerHTML" });
+      }
+      const detailPanel = document.getElementById("email-detail");
+      const selectedEmailIndex = document.getElementById("selectedEmailIndex");
+      const selectedEmailUid = document.getElementById("selectedEmailUid");
+      if (detailPanel && selectedEmailUid && selectedEmailUid.value) {
+        htmx.ajax("POST", `/ui/emails/${encodeURIComponent(selectedEmailUid.value)}`, { target: detailPanel, swap: "innerHTML" });
+      } else if (detailPanel && selectedEmailIndex && selectedEmailIndex.value) {
+        htmx.ajax("POST", `/ui/emails/${selectedEmailIndex.value}`, { target: detailPanel, swap: "innerHTML" });
+      }
+    });
+
+    let routingDraggedAssignee = null;
+    const routingLongPressDelayMs = 250;
+    const routingPressState = new WeakMap();
+
+    function routingClearPressState(chip, keepLongPress = false) {
+      const state = routingPressState.get(chip);
+      if (!state) return;
+      if (state.timerId) {
+        window.clearTimeout(state.timerId);
+      }
+      if (keepLongPress) {
+        state.timerId = null;
+        return;
+      }
+      routingPressState.delete(chip);
+    }
+
+    function routingIsDragAllowed(chip, target) {
+      return Boolean(chip && !target.closest("[data-routing-active-toggle]"));
+    }
+
+    async function routingToggleActiveAssignee(assigneeId, toggle) {
+      toggle.disabled = true;
+      try {
+        const response = await fetch(`/ui/settings/routing-table/${assigneeId}/toggle-active`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        });
+        await replaceRoutingSummaryFromResponse(response);
+      } catch (error) {
+        console.warn("routing active toggle failed", error);
+      } finally {
+        refreshRoutingTablePanel();
+      }
+    }
+
+    function routingChipAfterElement(list, pointerY) {
+      const candidates = Array.from(list.querySelectorAll("[data-routing-assignee-chip]:not(.is-dragging)"));
+      return candidates.reduce(function (closest, candidate) {
+        const rect = candidate.getBoundingClientRect();
+        const offset = pointerY - rect.top - rect.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: candidate };
+        }
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    }
+
+    function refreshRoutingTablePanel() {
+      const tablePanel = document.getElementById("routingTablePanel");
+      if (!tablePanel || !window.htmx) return;
+      htmx.ajax("GET", "/ui/settings/routing-table", { target: tablePanel, swap: "outerHTML" });
+    }
+
+    async function replaceRoutingSummaryFromResponse(response) {
+      if (!response.ok) throw new Error(`routing summary update failed: ${response.status}`);
+      const html = await response.text();
+      const currentPanel = document.getElementById("routingSummaryPanel");
+      if (currentPanel) currentPanel.outerHTML = html;
+    }
+
+    document.body.addEventListener("pointerdown", function (event) {
+      const chip = event.target.closest("[data-routing-assignee-chip]");
+      if (!chip || event.target.closest("[data-routing-active-toggle]")) return;
+      routingClearPressState(chip);
+      const state = {
+        timerId: null,
+        longPressActivated: false,
+        blockedDragAttempt: false,
+      };
+      if (!event.target.closest("[data-routing-drag-handle]")) {
+        state.timerId = window.setTimeout(function () {
+          const currentState = routingPressState.get(chip);
+          if (currentState) currentState.longPressActivated = true;
+        }, routingLongPressDelayMs);
+      }
+      routingPressState.set(chip, state);
+    });
+
+    document.body.addEventListener("pointerup", function (event) {
+      const chip = event.target.closest("[data-routing-assignee-chip]");
+      if (!chip) return;
+      routingClearPressState(chip, true);
+    });
+
+    document.body.addEventListener("pointercancel", function (event) {
+      const chip = event.target.closest("[data-routing-assignee-chip]");
+      if (!chip) return;
+      routingClearPressState(chip);
+    });
+
+    document.body.addEventListener("dragstart", function (event) {
+      const chip = event.target.closest("[data-routing-assignee-chip]");
+      if (!chip || event.target.closest("[data-routing-active-toggle]")) return;
+      if (!routingIsDragAllowed(chip, event.target)) {
+        const state = routingPressState.get(chip);
+        if (state) state.blockedDragAttempt = true;
+        event.preventDefault();
+        return;
+      }
+      routingDraggedAssignee = chip;
+      chip.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", chip.dataset.assigneeId || "");
+    });
+
+    document.body.addEventListener("dragend", function () {
+      if (routingDraggedAssignee) routingDraggedAssignee.classList.remove("is-dragging");
+      document.querySelectorAll("[data-routing-assignee-list].is-drop-target").forEach(function (list) {
+        list.classList.remove("is-drop-target");
+      });
+      if (routingDraggedAssignee) {
+        routingClearPressState(routingDraggedAssignee);
+      }
+      routingDraggedAssignee = null;
+    });
+
+    document.body.addEventListener("dragover", function (event) {
+      const list = event.target.closest("[data-routing-assignee-list]");
+      if (!list || !routingDraggedAssignee) return;
+      event.preventDefault();
+      list.classList.add("is-drop-target");
+      const afterElement = routingChipAfterElement(list, event.clientY);
+      if (afterElement) {
+        list.insertBefore(routingDraggedAssignee, afterElement);
+      } else {
+        list.appendChild(routingDraggedAssignee);
+      }
+    });
+
+    document.body.addEventListener("dragleave", function (event) {
+      const list = event.target.closest("[data-routing-assignee-list]");
+      if (!list || list.contains(event.relatedTarget)) return;
+      list.classList.remove("is-drop-target");
+    });
+
+    document.body.addEventListener("drop", async function (event) {
+      const list = event.target.closest("[data-routing-assignee-list]");
+      if (!list || !routingDraggedAssignee) return;
+      event.preventDefault();
+      list.classList.remove("is-drop-target");
+      const params = new URLSearchParams();
+      params.append("category", list.dataset.routingLabel || "");
+      list.querySelectorAll("[data-routing-assignee-chip][data-assignee-id]").forEach(function (chip) {
+        params.append("assignee_ids", chip.dataset.assigneeId || "");
+      });
+      try {
+        const response = await fetch("/ui/settings/routing-summary/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params,
+        });
+        await replaceRoutingSummaryFromResponse(response);
+      } catch (error) {
+        console.warn("routing reorder failed", error);
+      } finally {
+        refreshRoutingTablePanel();
+      }
+    });
+
+    document.body.addEventListener("click", async function (event) {
+      const toggle = event.target.closest("[data-routing-active-toggle]");
+      if (toggle) {
+        event.preventDefault();
+        const assigneeId = toggle.dataset.assigneeId || "";
+        if (!assigneeId) return;
+        await routingToggleActiveAssignee(assigneeId, toggle);
+        return;
+      }
+
+      const chip = event.target.closest("[data-routing-assignee-chip]");
+      if (!chip) return;
+      if (event.target.closest("[data-routing-drag-handle]")) {
+        routingClearPressState(chip);
+        return;
+      }
+      const assigneeId = chip.dataset.assigneeId || "";
+      if (!assigneeId) return;
+      const state = routingPressState.get(chip);
+      if (state && (state.longPressActivated || state.blockedDragAttempt)) {
+        routingClearPressState(chip);
+        return;
+      }
+      routingClearPressState(chip);
+      await routingToggleActiveAssignee(assigneeId, chip.querySelector("[data-routing-active-toggle]"));
+    });
+
+    document.body.addEventListener("mail-deleted", function (event) {
+      clearDemoMainViewCache();
+      const payload = event.detail || {};
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (selectedIndex) {
+        if (payload.next_email_index !== null && payload.next_email_index !== undefined) {
+          selectedIndex.value = String(payload.next_email_index);
+        } else {
+          selectedIndex.value = "";
+        }
+      }
+      if (selectedUid) {
+        selectedUid.value = payload.next_email_uid || "";
+      }
+
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      if (document.getElementById("email-detail")) {
+        if (payload.next_email_index !== null && payload.next_email_index !== undefined && payload.next_email_uid) {
+          refreshInboxDetail(payload.next_email_index, payload.next_email_uid);
+        } else {
+          refreshFragment("/ui/inbox", "#main-panel");
+        }
+      }
+      if (document.getElementById("dashboardMailRows")) {
+        refreshFragment(dashboardMailRowsUrl(), "#dashboardMailRows");
+      }
+      if (document.getElementById("stats")) {
+        refreshFragment("/ui/stats", "#stats");
+      }
+      if (document.getElementById("dashboardDistribution")) {
+        refreshFragment("/ui/dashboard-distribution", "#dashboardDistribution");
+      }
+      if (document.getElementById("dashboardCategoryTimeline")) {
+        refreshFragment("/ui/dashboard-category-timeline", "#dashboardCategoryTimeline");
+      }
+      if (document.getElementById("dashboardRoutingOverview")) {
+        refreshFragment("/ui/dashboard-routing-overview", "#dashboardRoutingOverview");
+      }
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-classification-regenerated", function (event) {
+      clearDemoMainViewCache();
+      stopClassificationProgress();
+      const payload = event.detail || {};
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (selectedIndex && payload.email_index !== null && payload.email_index !== undefined) {
+        selectedIndex.value = String(payload.email_index);
+      }
+      if (selectedUid && payload.email_uid) {
+        selectedUid.value = payload.email_uid;
+      }
+      if (payload.email_index !== null && payload.email_index !== undefined) {
+        refreshInboxDetail(payload.email_index, payload.email_uid);
+      }
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      refreshOpsRows();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-summary-regenerated", function (event) {
+      clearDemoMainViewCache();
+      stopSummaryProgress();
+      const payload = event.detail || {};
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (selectedIndex && payload.email_index !== null && payload.email_index !== undefined) {
+        selectedIndex.value = String(payload.email_index);
+      }
+      if (selectedUid && payload.email_uid) {
+        selectedUid.value = payload.email_uid;
+      }
+      if (payload.email_index !== null && payload.email_index !== undefined) {
+        refreshInboxDetail(payload.email_index, payload.email_uid);
+      }
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      refreshOpsRows();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-attachments-reanalyzed", function (event) {
+      clearDemoMainViewCache();
+      stopAttachmentProgress();
+      const payload = event.detail || {};
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (selectedIndex && payload.email_index !== null && payload.email_index !== undefined) {
+        selectedIndex.value = String(payload.email_index);
+      }
+      if (selectedUid && payload.email_uid) {
+        selectedUid.value = payload.email_uid;
+      }
+      if (payload.email_index !== null && payload.email_index !== undefined) {
+        refreshInboxDetail(payload.email_index, payload.email_uid);
+      }
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      refreshOpsRows();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-manual-assignment-completed", function (event) {
+      clearDemoMainViewCache();
+      const payload = event.detail || {};
+      const selectedIndex = document.getElementById("selectedEmailIndex");
+      const selectedUid = document.getElementById("selectedEmailUid");
+      if (selectedIndex && payload.email_index !== null && payload.email_index !== undefined) {
+        selectedIndex.value = String(payload.email_index);
+      }
+      if (selectedUid && payload.email_uid) {
+        selectedUid.value = payload.email_uid;
+      }
+      if (document.getElementById("email-detail") && payload.email_uid) {
+        refreshInboxDetail(payload.email_index, payload.email_uid);
+      }
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      if (document.getElementById("dashboardRoutingOverview")) {
+        refreshFragment("/ui/dashboard-routing-overview", "#dashboardRoutingOverview");
+      }
+      refreshOpsRows();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-read-state-changed", function (event) {
+      clearDemoMainViewCache();
+      markInboxRowReadByUid((event.detail || {}).email_uid || "");
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      refreshCurrentAssigneeWork();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("work-item-status-changed", function (event) {
+      clearDemoMainViewCache();
+      const payload = event.detail || {};
+      if (document.getElementById("mailRows")) {
+        refreshInboxRows();
+      }
+      if (payload.email_uid && document.getElementById("email-detail")) {
+        refreshInboxDetail(null, payload.email_uid);
+      }
+      refreshCurrentAssigneeWork();
+      refreshOpsRows();
+      if (document.getElementById("dashboardMailRows")) {
+        refreshFragment(dashboardMailRowsUrl(), "#dashboardMailRows");
+      }
+      if (document.getElementById("stats")) {
+        refreshFragment("/ui/stats", "#stats");
+      }
+      if (document.getElementById("dashboardRoutingOverview")) {
+        refreshFragment("/ui/dashboard-routing-overview", "#dashboardRoutingOverview");
+      }
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-decision-run-created", function () {
+      clearDemoMainViewCache();
+      refreshOpsRows();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-manual-route-started", function () {
+      clearDemoMainViewCache();
+      refreshOpsRows();
+      nudgeUiSync(200);
+    });
+
+    document.body.addEventListener("mail-delete-warning", function (event) {
+      const payload = event.detail || {};
+      const message = payload.message || "Gmail 휴지통 이동 요청이 실패했습니다.";
+      window.alert(message);
+    });
+
+    document.body.addEventListener("htmx:beforeRequest", function (event) {
+      const source = event.detail.elt;
+      if (!(source instanceof HTMLElement)) return;
+      reflectImmediateHtmxState(event);
+      if (source.matches("[data-classification-regenerate-button]")) {
+        source.classList.remove("route-now-btn--ready", "route-now-btn--sent", "route-now-btn--failed", "route-now-btn--unassigned");
+        source.classList.add("route-now-btn--pending");
+        source.lastChild.textContent = " 분류중";
+        activateClassificationProgress(source.closest(".detail-card"), {
+          initialPercent: 6,
+          label: "재분류 요청 수락됨",
+          caption: "현재 규칙과 모델 기준으로 메일 유형 재분류를 시작할 준비를 하고 있습니다.",
+        });
+        return;
+      }
+      if (source.matches("[data-summary-regenerate-button]")) {
+        source.classList.remove("route-now-btn--ready", "route-now-btn--sent", "route-now-btn--failed", "route-now-btn--unassigned");
+        source.classList.add("route-now-btn--pending");
+        source.lastChild.textContent = " 생성중";
+        activateSummaryProgress(source.closest(".detail-card"), {
+          initialPercent: 6,
+          label: "재생성 요청 수락됨",
+          caption: "현재 프롬프트 버전으로 executive summary를 다시 생성할 준비를 하고 있습니다.",
+        });
+        return;
+      }
+      if (source.matches("[data-attachment-reanalyze-button]")) {
+        source.classList.remove("route-now-btn--ready", "route-now-btn--sent", "route-now-btn--failed", "route-now-btn--unassigned");
+        source.classList.add("route-now-btn--pending");
+        source.lastChild.textContent = " 생성중";
+        activateAttachmentProgress(source.closest(".detail-card"), {
+          initialPercent: 6,
+          label: "재분석 요청 수락됨",
+          caption: "현재 첨부파일들을 다시 분석할 준비를 하고 있습니다.",
+        });
+        return;
+      }
+      if (source.matches("[data-chat-composer]")) {
+        hydrateChatSessionInputs(source);
+        renderChatPendingState(source);
+        return;
+      }
+      if (source.matches("[data-chat-retry-query]")) {
+        const form = chatComposerForSource(source);
+        if (form) {
+          hydrateChatSessionInputs(form);
+          renderChatPendingState(form, source.dataset.chatRetryQuery || "");
+        }
+        source.disabled = true;
+        return;
+      }
+      if (source.matches("[data-chat-email-drawer-open]")) {
+        renderChatEmailDrawerLoading(source);
+        return;
+      }
+      const assigneeId = source.dataset.assigneeId || source.getAttribute("data-assignee-field");
+      if (!assigneeId) return;
+      const status = document.getElementById(`routing-assignee-status-${assigneeId}`);
+      if (status) status.textContent = "저장 중...";
+    });
+
+    document.body.addEventListener("htmx:afterRequest", function (event) {
+      const source = event.detail.elt;
+      if (!(source instanceof HTMLElement)) return;
+      if (htmxTargetSelector(source) === "#email-detail" && !event.detail.successful) {
+        uiSyncState.detailRequestUid = "";
+        uiSyncState.detailRequestNeedsVersionSync = false;
+        renderInboxDetailRequestError(event.detail.xhr?.status);
+        refreshInboxRows();
+      }
+      if (source.matches(".nav button[hx-post][hx-target='#main-panel']") || htmxTargetSelector(source) === "#main-panel") {
+        setMainNavigationBusy(false);
+        if (source.matches(".nav button[hx-post][hx-target='#main-panel']")) return;
+      }
+      if (source.matches("[data-chat-composer]")) {
+        syncChatSessionInputFromResponse(source, chatResultsBodyForForm(source));
+        if (!event.detail.successful) {
+          renderChatErrorState(source, "대화 결과를 불러오지 못했습니다.");
+        } else {
+          delete source.dataset.chatPendingQuery;
+          scrollChatThreadToBottom(source);
+        }
+        return;
+      }
+      if (source.matches("[data-chat-retry-query]")) {
+        const form = chatComposerForSource(source);
+        if (form) {
+          syncChatSessionInputFromResponse(form, chatResultsBodyForForm(form));
+          if (!event.detail.successful) {
+            renderChatErrorState(form, "대화 결과를 불러오지 못했습니다.");
+          } else {
+            delete form.dataset.chatPendingQuery;
+            scrollChatThreadToBottom(form);
+          }
+        }
+        source.disabled = false;
+        return;
+      }
+      if (source.matches("[data-chat-email-drawer-open]")) {
+        if (!event.detail.successful) {
+          renderChatEmailDrawerError(event.detail.xhr?.status);
+        }
+        return;
+      }
+      if (source.matches("[data-classification-regenerate-button]")) {
+        if (!event.detail.successful) {
+          source.classList.remove("route-now-btn--pending", "route-now-btn--ready", "route-now-btn--sent", "route-now-btn--unassigned");
+          source.classList.add("route-now-btn--failed");
+          source.lastChild.textContent = " 실패";
+          source.disabled = false;
+          failClassificationProgress(source.closest(".detail-card"));
+        }
+        if (event.detail.successful) {
+          nudgeUiSync(200);
+        }
+        return;
+      }
+      if (source.matches("[data-summary-regenerate-button]")) {
+        if (!event.detail.successful) {
+          source.classList.remove("route-now-btn--pending", "route-now-btn--ready", "route-now-btn--sent", "route-now-btn--unassigned");
+          source.classList.add("route-now-btn--failed");
+          source.lastChild.textContent = " 실패";
+          source.disabled = false;
+          failSummaryProgress(source.closest(".detail-card"));
+        }
+        if (event.detail.successful) {
+          nudgeUiSync(200);
+        }
+        return;
+      }
+      if (source.matches("[data-attachment-reanalyze-button]")) {
+        if (!event.detail.successful) {
+          source.classList.remove("route-now-btn--pending", "route-now-btn--ready", "route-now-btn--sent", "route-now-btn--unassigned");
+          source.classList.add("route-now-btn--failed");
+          source.lastChild.textContent = " 실패";
+          source.disabled = false;
+          failAttachmentProgress(source.closest(".detail-card"));
+        }
+        if (event.detail.successful) {
+          nudgeUiSync(200);
+        }
+        return;
+      }
+      if (source.matches("[data-manual-route-button]")) {
+        if (event.detail.successful) {
+          scheduleManualRoutePoll(1200);
+          nudgeUiSync(200);
+        }
+        return;
+      }
+      const assigneeId = source.dataset.assigneeId || source.getAttribute("data-assignee-field");
+      if (!assigneeId) return;
+      const status = document.getElementById(`routing-assignee-status-${assigneeId}`);
+      if (!status) return;
+      status.textContent = event.detail.successful ? "자동 저장됨" : "저장 실패";
+    });
+
+    document.body.addEventListener("htmx:responseError", function (event) {
+      const source = event.detail.elt;
+      if (!(source instanceof HTMLElement)) return;
+      if (source.matches("[data-chat-composer]")) {
+        renderChatErrorState(source, `대화 결과를 불러오지 못했습니다. HTTP ${event.detail.xhr.status}`);
+        return;
+      }
+      if (source.matches("[data-chat-retry-query]")) {
+        const form = chatComposerForSource(source);
+        if (form) renderChatErrorState(form, `대화 결과를 불러오지 못했습니다. HTTP ${event.detail.xhr.status}`);
+        source.disabled = false;
+        return;
+      }
+      if (source.matches("[data-chat-email-drawer-open]")) {
+        renderChatEmailDrawerError(event.detail.xhr.status);
+        return;
+      }
+      if (!source.closest(".detail-delete-btn")) return;
+
+      let message = `삭제 실패 (${event.detail.xhr.status})`;
+      const raw = event.detail.xhr.responseText || "";
+      try {
+        const payload = JSON.parse(raw);
+        if (payload && payload.detail) message = String(payload.detail);
+      } catch (_) {
+        if (raw.trim()) message = raw.trim();
+      }
+      window.alert(message);
+    });
+
+    document.body.addEventListener("click", function (event) {
+      const copyRef = event.target.closest("[data-copy-business-ref]");
+      if (copyRef) {
+        event.preventDefault();
+        event.stopPropagation();
+        const value = copyRef.dataset.copyBusinessRef || copyRef.textContent.trim();
+        if (!value) return;
+        copyTextToClipboard(value).then(function () {
+          showCopyToast("업무번호가 복사됐습니다.");
+        }).catch(function () {
+          showCopyToast("복사하지 못했습니다.");
+        });
+        return;
+      }
+
+      const editorToggle = event.target.closest("[data-assignee-editor-toggle]");
+      if (editorToggle) {
+        const editorId = editorToggle.dataset.assigneeEditorId || "";
+        if (!editorId) return;
+        const editorRow = document.querySelector(`[data-assignee-editor-row="${editorId}"]`);
+        if (!editorRow) return;
+        editorRow.classList.toggle("is-hidden");
+        return;
+      }
+
+      const attachment = event.target.closest("#email-detail details.attachment[data-attachment-key]");
+      if (attachment) {
+        window.setTimeout(storeAttachmentOpenState, 0);
+      }
+
+      const row = event.target.closest("#mailRows .clickable-row[data-email-index][data-email-uid]");
+      if (row) {
+        selectInboxRow(row);
+        return;
+      }
+
+      const related = event.target.closest(".related-mail-card[data-email-index][data-email-uid]");
+      if (!related) return;
+
+      const selectedInput = document.getElementById("selectedEmailIndex");
+      const selectedUidInput = document.getElementById("selectedEmailUid");
+      if (selectedInput) selectedInput.value = related.dataset.emailIndex || "";
+      if (selectedUidInput) selectedUidInput.value = related.dataset.emailUid || "";
+
+      const relatedUid = related.dataset.emailUid || "";
+      const matchingRow = Array.from(document.querySelectorAll("#mailRows .clickable-row[data-email-uid]")).find(function (candidate) {
+        return candidate.dataset.emailUid === relatedUid;
+      });
+      if (matchingRow) selectInboxRow(matchingRow);
+    });
+
+    document.body.addEventListener("input", function (event) {
+      const input = event.target.closest("[data-assignee-sync][data-assignee-id]");
+      if (!(input instanceof HTMLInputElement)) return;
+
+      const assigneeId = input.dataset.assigneeId || "";
+      const syncType = input.dataset.assigneeSync || "";
+      const value = input.value.trim() || "-";
+
+      if (syncType === "name") {
+        const display = document.querySelector(`[data-assignee-display-name="${assigneeId}"]`);
+        if (display) display.textContent = value;
+      } else if (syncType === "department") {
+        const display = document.querySelector(`[data-assignee-display-department="${assigneeId}"]`);
+        if (display) display.textContent = value;
+      } else if (syncType === "position") {
+        const display = document.querySelector(`[data-assignee-display-position="${assigneeId}"]`);
+        if (display) display.textContent = value;
+      } else if (syncType === "email") {
+        const display = document.querySelector(`[data-assignee-display-email="${assigneeId}"]`);
+        if (display) display.textContent = value;
+      }
+    });
+
+    document.body.addEventListener("htmx:configRequest", function (event) {
+      const source = event.detail.elt;
+      if (!(source instanceof HTMLElement)) return;
+      const path = String(event.detail.path || event.detail.requestConfig?.path || "");
+      const requestUrl = new URL(path || "/", window.location.origin);
+      if (source.matches("[data-chat-composer]") || source.matches("[data-chat-retry-query]") || requestUrl.pathname === "/ui/chats") {
+        hydrateChatSessionInputs(source.closest("#main-panel") || document);
+        const form = chatComposerForSource(source);
+        const input = form ? form.querySelector("#chatSessionInput") : document.querySelector("[data-chat-composer] #chatSessionInput");
+        const sessionId = safeChatSessionId((input && input.value) || storedChatSessionId());
+        if (sessionId) {
+          event.detail.parameters.session_id = sessionId;
+          if (requestUrl.pathname === "/ui/chats" && !requestUrl.searchParams.get("session_id")) {
+            requestUrl.searchParams.set("session_id", sessionId);
+            event.detail.path = `${requestUrl.pathname}${requestUrl.search}`;
+            if (event.detail.requestConfig) {
+              event.detail.requestConfig.path = `${requestUrl.pathname}${requestUrl.search}`;
+            }
+          }
+        }
+        const historyInput = form ? form.querySelector("#chatHistoryInput") : null;
+        if (historyInput) event.detail.parameters.chat_history = historyInput.value || "[]";
+        if (source.matches("[data-chat-retry-query]")) {
+          event.detail.parameters.q = source.dataset.chatRetryQuery || event.detail.parameters.q || "";
+        }
+      }
+      const dashboardRow = source.closest("#dashboardMailRows .clickable-row");
+      if (!dashboardRow) return;
+
+      if (requestUrl.pathname !== "/ui/inbox") return;
+
+      const activeCategory = window.categoryFilterState && window.categoryFilterState.activeCategory;
+      if (!activeCategory || activeCategory === "__all__") return;
+      event.detail.parameters.category = activeCategory;
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+      installResponsiveHtmxControls(document);
+      installMainNavigation();
+      installDemoMainNavigationCache();
+      installSearchFormFallback();
+      installSearchExamples();
+      hydrateChatSessionInputs(document);
+      limitInboxRows();
+      syncInboxSelection();
+      initDashboardDistribution(document);
+      initDashboardCategoryTimeline(document);
+      initDashboardRoutingOverview(document);
+      initMonitoringColumns(document);
+      initOpsInteractions(document);
+      initAssigneeDetailDrawerInteractions(document);
+      initChatEmailDrawerInteractions(document);
+      updateMailStatusFilterButtons(document);
+      updateCategoryFilterButtons(document);
+      resizeEmailBodyFrames(document);
+      syncDashboardViewportMode();
+      resetUiSync();
+      scheduleManualRoutePoll(1500);
+      prefetchDemoMainViews();
+      window.setInterval(checkClientVersion, 15000);
+    });
+
+    window.addEventListener("resize", limitInboxRows);
+    window.addEventListener("resize", function () {
+      updateMailStatusFilterButtons(document);
+      updateCategoryFilterButtons(document);
+    });
+  </script>
