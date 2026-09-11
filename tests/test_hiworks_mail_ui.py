@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import app.server as server
+from app.services.hiworks_mail_service import HiworksMailboxService
 from tests.ui_test_support import request
 
 
@@ -73,3 +74,27 @@ def test_hiworks_provider_uses_hiworks_mail_service_for_inbox(monkeypatch):
     monkeypatch.setattr(server, "_gmail_service", gmail_service)
 
     assert server.mail_rows()[0]["email_uid"] == "hiworks-mail"
+
+
+def test_hiworks_public_status_uses_persisted_success_after_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORAMAIL_HIWORKS_MAIL_ADDRESS", "hiworks@example.com")
+    monkeypatch.setenv("CORAMAIL_HIWORKS_POP3_USERNAME", "hiworks@example.com")
+    monkeypatch.setenv("CORAMAIL_HIWORKS_APP_PASSWORD", "app-password")
+    service = HiworksMailboxService(
+        tmp_path,
+        sync_repository=SimpleNamespace(
+            account_status=lambda: {
+                "email_address": "hiworks@example.com",
+                "status": "active",
+                "last_synced_at": "2026-09-11T05:00:00+00:00",
+                "last_error": "",
+                "message_count": 92,
+            }
+        ),
+    )
+
+    status = service.public_status()
+
+    assert status["connected"] is True
+    assert status["status"] == "active"
+    assert status["message_count"] == 92

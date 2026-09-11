@@ -121,6 +121,12 @@ def build_server_route_router(endpoints: EndpointMap) -> APIRouter:
         response_class=HTMLResponse,
     )
     router.add_api_route(
+        "/ui/settings/mail-provider",
+        endpoint("ui_settings_mail_provider"),
+        methods=["POST"],
+        response_class=HTMLResponse,
+    )
+    router.add_api_route(
         "/ui/settings/gmail/client-config",
         endpoint("ui_save_gmail_client_config"),
         methods=["POST"],

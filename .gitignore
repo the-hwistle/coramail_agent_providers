@@ -22,6 +22,7 @@ env/
 .env.*
 !.env.example
 config/production.env
+config/*-feasibility.env
 *.pem
 *.key
 *.crt

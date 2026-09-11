@@ -110,7 +110,7 @@ class NaverMailboxService:
     def status(self) -> dict[str, Any]:
         config = NaverImapConfig.from_env()
         with self._lock:
-            return {
+            status = {
                 "account": config.email_address or "Naver Mail 계정 미설정",
                 "last_error": self._last_error,
                 "last_synced_at": self._last_synced_at,
@@ -118,6 +118,23 @@ class NaverMailboxService:
                 "preview_count": self._preview_count,
                 "version": self._version,
             }
+        if self.sync_repository is not None:
+            persisted = self.sync_repository.account_status()
+            if persisted:
+                persisted_error = str(persisted.get("last_error") or "")
+                persisted_count = int(persisted.get("message_count") or 0)
+                if not status["last_synced_at"] and persisted.get("last_synced_at"):
+                    status["last_synced_at"] = persisted["last_synced_at"]
+                if not status["message_count"] and persisted_count:
+                    status["message_count"] = persisted_count
+                    status["preview_count"] = persisted_count
+                if status["version"] == "naver:idle" and persisted.get("status") == "active" and not persisted_error:
+                    status["version"] = "naver:ok:persisted"
+                if not status["last_error"] and persisted_error:
+                    status["last_error"] = persisted_error
+                if not config.email_address and persisted.get("email_address"):
+                    status["account"] = str(persisted["email_address"])
+        return status
 
     def public_status(self) -> dict[str, Any]:
         config = NaverImapConfig.from_env()

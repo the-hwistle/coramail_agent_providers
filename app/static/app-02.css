@@ -9,6 +9,79 @@
   display: grid;
   gap: 16px;
 }
+.mail-provider-switch {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(6, 24, 47, .08);
+  border-radius: 8px;
+  background: #fff;
+}
+.mail-provider-switch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.mail-provider-switch-head .material-symbols-outlined {
+  color: var(--secondary);
+  font-size: 20px;
+}
+.mail-provider-switch-head div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.mail-provider-switch-head strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+.mail-provider-switch-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mail-provider-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.mail-provider-option {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, .36);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mail-provider-option:hover {
+  border-color: rgba(10, 99, 189, .36);
+  background: #f7fbff;
+}
+.mail-provider-option:focus-visible {
+  outline: 2px solid rgba(10, 99, 189, .30);
+  outline-offset: 2px;
+}
+.mail-provider-option.is-active {
+  border-color: rgba(10, 99, 189, .42);
+  background: #eaf4ff;
+}
+.mail-provider-option span {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.mail-provider-option small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
 .gmail-connect-hero {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -902,6 +975,55 @@ summary:focus-visible {
 
 .mode-switch:hover {
   filter: brightness(.98);
+}
+
+.mode-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 36px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-low);
+}
+
+.mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mode-option:hover {
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text);
+}
+
+.mode-option.is-active {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.mode-option-protocol {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.mode-option.is-active .mode-option-protocol {
+  color: var(--secondary);
 }
 
 .mode-badge-demo {
@@ -2857,4 +2979,10 @@ tr:hover td {
     justify-content: flex-start;
   }
 
+}
+
+@media (max-width: 560px) {
+  .mail-provider-options {
+    grid-template-columns: 1fr;
+  }
 }

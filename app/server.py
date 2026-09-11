@@ -88,6 +88,16 @@ DEMO_SCREENSHOT_ACCOUNT_LABEL = "dawon.febsolution@gmail.com"
 DEMO_SCREENSHOT_QUOTATION_EMAIL_UID = "0732e633-db61-536e-8ff3-b820826cf9a2"
 DEMO_SCREENSHOT_QUOTATION_SUBJECT = "[견적서 송부] 산업용 네트워크 장비 및 전원모듈"
 DEMO_SCREENSHOT_QUOTATION_COUNTERPARTY = "다원"
+MAIL_PROVIDER_OPTIONS = [
+    {"value": "gmail", "label": "Gmail", "protocol": "API"},
+    {"value": "naver", "label": "Naver", "protocol": "IMAP"},
+    {"value": "hiworks", "label": "하이웍스", "protocol": "POP3"},
+]
+DISPLAY_MODE_OPTIONS = [
+    {"value": "demo", "label": "Demo", "protocol": "Fixture"},
+    *MAIL_PROVIDER_OPTIONS,
+]
+_mail_provider_override: str | None = None
 DISPLAY_TIMEZONE = ZoneInfo("Asia/Seoul")
 KOREAN_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 BUSINESS_CATEGORY_ORDER = ["발주", "문의", "서비스", "기술", "기타", "미분류"]
@@ -161,6 +171,7 @@ AUTH_COOKIE_SECURE = os.getenv("CORAMAIL_AUTH_COOKIE_SECURE", "false").strip().c
     "yes",
 }
 _display_demo_mode: ContextVar[bool | None] = ContextVar("coramail_display_demo_mode", default=None)
+_display_mail_provider: ContextVar[str | None] = ContextVar("coramail_display_mail_provider", default=None)
 _runtime = build_server_runtime(PROJECT_DIR)
 _gmail_account_repository = _runtime.gmail_account_repository
 _gmail_oauth_service = _runtime.gmail_oauth_service
@@ -352,13 +363,39 @@ def default_demo_mode() -> bool:
     return value.strip().casefold() not in {"0", "false", "off", "no"}
 
 
-def request_demo_mode(request: Request) -> bool:
+def provider_label(provider: str) -> str:
+    return {
+        "gmail": "Gmail",
+        "naver": "Naver",
+        "hiworks": "하이웍스",
+    }.get(provider, "Gmail")
+
+
+def _valid_mail_provider(value: str) -> str:
+    allowed = {str(option["value"]) for option in MAIL_PROVIDER_OPTIONS}
+    return value if value in allowed else mail_provider()
+
+
+def request_display_mode(request: Request) -> str:
     cookie_value = str(request.cookies.get(DISPLAY_MODE_COOKIE_NAME) or "").strip().casefold()
     if cookie_value in {"demo", "1", "true", "on", "yes"}:
-        return True
-    if cookie_value in {"gmail", "real", "actual", "0", "false", "off", "no"}:
-        return False
-    return default_demo_mode()
+        return "demo"
+    if cookie_value in {"real", "actual", "0", "false", "off", "no"}:
+        return _valid_mail_provider(mail_provider())
+    if cookie_value in {str(option["value"]) for option in MAIL_PROVIDER_OPTIONS}:
+        return cookie_value
+    return "demo" if default_demo_mode() else _valid_mail_provider(mail_provider())
+
+
+def request_demo_mode(request: Request) -> bool:
+    return request_display_mode(request) == "demo"
+
+
+def request_mail_provider(request: Request) -> str:
+    mode = request_display_mode(request)
+    if mode == "demo":
+        return _valid_mail_provider(mail_provider())
+    return _valid_mail_provider(mode)
 
 
 def demo_mode_enabled() -> bool:
@@ -382,15 +419,25 @@ def postgres_jobs_enabled() -> bool:
 
 
 def active_mail_provider() -> str:
-    return mail_provider()
+    return _display_mail_provider.get() or _mail_provider_override or _valid_mail_provider(mail_provider())
 
 
 def active_provider_label() -> str:
-    return {
-        "gmail": "Gmail",
-        "naver": "Naver",
-        "hiworks": "하이웍스",
-    }.get(active_mail_provider(), "Gmail")
+    return provider_label(active_mail_provider())
+
+
+def active_mail_provider_source() -> str:
+    if _display_mail_provider.get():
+        return "display"
+    return "runtime" if _mail_provider_override else "environment"
+
+
+def mail_provider_options() -> list[dict[str, str]]:
+    return [dict(option) for option in MAIL_PROVIDER_OPTIONS]
+
+
+def display_mode_options() -> list[dict[str, str]]:
+    return [dict(option) for option in DISPLAY_MODE_OPTIONS]
 
 
 def active_provider_service() -> GmailMailboxService | NaverMailboxService | HiworksMailboxService:
@@ -531,11 +578,14 @@ def _service_email_detail_by_ref(service: Any, email_ref: str) -> dict[str, obje
 
 @app.middleware("http")
 async def set_display_mode_context(request: Request, call_next) -> Response:
-    token = _display_demo_mode.set(request_demo_mode(request))
+    mode = request_display_mode(request)
+    demo_token = _display_demo_mode.set(mode == "demo")
+    provider_token = _display_mail_provider.set(None if mode == "demo" else _valid_mail_provider(mode))
     try:
         return await call_next(request)
     finally:
-        _display_demo_mode.reset(token)
+        _display_mail_provider.reset(provider_token)
+        _display_demo_mode.reset(demo_token)
 
 
 @app.middleware("http")
@@ -752,6 +802,7 @@ def ui_globals(request: Request | None = None) -> dict[str, object]:
     provider = active_mail_provider()
     provider_label = active_provider_label()
     mail_status = active_mail_status()
+    display_mode = "demo" if demo_mode_enabled() else provider
     auth_user = current_authenticated_user(request)
     username = current_request_username(request)
     return {
@@ -759,10 +810,16 @@ def ui_globals(request: Request | None = None) -> dict[str, object]:
         "demo_mode": demo_mode_enabled(),
         "mail_provider": provider,
         "mail_provider_label": provider_label,
+        "mail_provider_options": mail_provider_options(),
+        "display_mode_options": display_mode_options(),
+        "mail_provider_source": active_mail_provider_source(),
         "mail_settings_panel_url": active_mail_settings_panel_url(),
-        "display_mode": "demo" if demo_mode_enabled() else provider,
+        "gmail_sync": active_mail_public_status(),
+        "gmail_settings_message": "",
+        "gmail_settings_error": "",
+        "display_mode": display_mode,
         "display_mode_label": "Demo" if demo_mode_enabled() else provider_label,
-        "display_mode_next_label": provider_label if demo_mode_enabled() else "Demo",
+        "display_mode_next_label": "메일 선택",
         "gmail_connected_account": DEMO_SCREENSHOT_ACCOUNT_LABEL if demo_mode_enabled() else mail_status["account"],
         "current_user": auth_user["name"] or auth_user["username"],
         "current_user_id": auth_user["user_id"],
@@ -1301,6 +1358,34 @@ def ui_hiworks_sync_settings(request: Request) -> HTMLResponse:
     return render_mail_sync_settings(request)
 
 
+async def ui_settings_mail_provider(request: Request) -> HTMLResponse:
+    global _mail_provider_override
+
+    form = _urlencoded_form(await request.body())
+    provider = str(form.get("provider") or "").strip().casefold()
+    allowed = {str(option["value"]) for option in MAIL_PROVIDER_OPTIONS}
+    if provider not in allowed:
+        return render_mail_sync_settings(request, error="지원하지 않는 메일 연동입니다.")
+    _mail_provider_override = None if provider == mail_provider() else provider
+    token = _display_mail_provider.set(provider)
+    try:
+        response = render_mail_sync_settings(
+            request,
+            message=f"{active_provider_label()} Mail 연동 화면으로 전환했습니다.",
+        )
+    finally:
+        _display_mail_provider.reset(token)
+    response.set_cookie(
+        DISPLAY_MODE_COOKIE_NAME,
+        provider,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=AUTH_COOKIE_SECURE,
+        samesite="lax",
+    )
+    return response
+
+
 async def ui_save_gmail_client_config(request: Request) -> HTMLResponse:
     return await _settings_handlers().save_gmail_client_config(request)
 
@@ -1381,8 +1466,8 @@ def ui_auto_assignment_policy(request: Request) -> HTMLResponse:
 
 
 
-def ui_display_mode_toggle(request: Request) -> Response:
-    return _settings_handlers().display_mode_toggle(request)
+def ui_display_mode_toggle(request: Request, display_mode: str = "") -> Response:
+    return _settings_handlers().display_mode_toggle(request, display_mode=display_mode)
 
 
 
@@ -4117,6 +4202,7 @@ app.include_router(
             "ui_gmail_sync_settings": ui_gmail_sync_settings,
             "ui_hiworks_settings_sync": ui_hiworks_settings_sync,
             "ui_hiworks_sync_settings": ui_hiworks_sync_settings,
+            "ui_settings_mail_provider": ui_settings_mail_provider,
             "ui_latest_mail_decision_run": ui_latest_mail_decision_run,
             "ui_mail_decision_run": ui_mail_decision_run,
             "ui_mail_decision_steps": ui_mail_decision_steps,

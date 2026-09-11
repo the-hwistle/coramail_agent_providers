@@ -10,6 +10,40 @@
     <div class="notice danger">{{ gmail_settings_error or gmail_sync.last_sync_error }}</div>
   {% endif %}
 
+  <section class="mail-provider-switch" aria-label="메일 연동 선택">
+    <div class="mail-provider-switch-head">
+      <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
+      <div>
+        <strong>메일 연동</strong>
+        <span>
+          {% if mail_provider_source == "display" %}
+            상단 선택 기준
+          {% elif mail_provider_source == "runtime" %}
+            현재 세션 선택
+          {% else %}
+            환경 설정 기준
+          {% endif %}
+        </span>
+      </div>
+    </div>
+    <div class="mail-provider-options" role="group" aria-label="메일 provider">
+      {% for option in mail_provider_options %}
+        <button
+          class="mail-provider-option{% if option.value == mail_provider %} is-active{% endif %}"
+          type="button"
+          hx-post="/ui/settings/mail-provider"
+          hx-vals='{"provider":"{{ option.value }}"}'
+          hx-target="#gmailSyncSettings"
+          hx-swap="outerHTML"
+          aria-pressed="{{ 'true' if option.value == mail_provider else 'false' }}"
+        >
+          <span>{{ option.label }}</span>
+          <small>{{ option.protocol }}</small>
+        </button>
+      {% endfor %}
+    </div>
+  </section>
+
   <section class="gmail-connect-hero">
     <div class="gmail-connect-icon" aria-hidden="true">
       <span class="material-symbols-outlined">mail</span>

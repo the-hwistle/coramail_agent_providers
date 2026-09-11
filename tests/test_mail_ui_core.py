@@ -1,7 +1,7 @@
 # ruff: noqa: F403, F405
 from tests.ui_test_support import *  # noqa: F401,F403
 
-def test_shell_renders_topbar_display_mode_switch():
+def test_shell_renders_topbar_display_mode_selector():
     html = server.templates.get_template("shell.html").render(
         **server.ui_globals(),
         request=request(),
@@ -31,8 +31,13 @@ def test_shell_renders_topbar_display_mode_switch():
         },
     )
 
-    assert 'class="mode-switch mode-switch-' in html
-    assert "mode-switch-text" in html
+    assert 'class="mode-selector"' in html
+    assert 'aria-label="메일 데이터 소스 선택"' in html
+    assert 'hx-post="/ui/display-mode/toggle?display_mode=demo"' in html
+    assert 'hx-post="/ui/display-mode/toggle?display_mode=gmail"' in html
+    assert 'hx-post="/ui/display-mode/toggle?display_mode=naver"' in html
+    assert 'hx-post="/ui/display-mode/toggle?display_mode=hiworks"' in html
+    assert 'aria-pressed="true"' in html
     assert "Evaluation 탭 열기" not in html
     assert "monitoring</span>Evaluation" not in html
 

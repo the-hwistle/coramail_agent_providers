@@ -89,19 +89,22 @@
           {% endif %}
         </div>
         <div class="top-actions">
-          <button
-            class="mode-switch mode-switch-{{ display_mode }}"
-            type="button"
-            hx-post="/ui/display-mode/toggle"
-            hx-swap="none"
-            title="{{ display_mode_next_label }} 데이터 보기로 전환"
-            aria-label="{{ display_mode_next_label }} 데이터 보기로 전환"
-          >
-            <span class="mode-switch-track" aria-hidden="true">
-              <span class="mode-switch-thumb"></span>
-            </span>
-            <span class="mode-switch-text">{{ display_mode_label }}</span>
-          </button>
+          <div class="mode-selector" role="group" aria-label="메일 데이터 소스 선택">
+            {% for option in display_mode_options|default([]) %}
+              <button
+                class="mode-option{% if option.value == display_mode %} is-active{% endif %}"
+                type="button"
+                hx-post="/ui/display-mode/toggle?display_mode={{ option.value }}"
+                hx-swap="none"
+                title="{{ option.label }} 데이터 보기"
+                aria-label="{{ option.label }} 데이터 보기"
+                aria-pressed="{{ 'true' if option.value == display_mode else 'false' }}"
+              >
+                <span class="mode-option-label">{{ option.label }}</span>
+                <span class="mode-option-protocol">{{ option.protocol }}</span>
+              </button>
+            {% endfor %}
+          </div>
           <button
             class="icon-btn"
             id="topbarManualSync"

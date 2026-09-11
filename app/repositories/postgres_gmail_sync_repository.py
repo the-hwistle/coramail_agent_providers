@@ -51,6 +51,37 @@ class PostgresGmailSyncRepository:
     def enabled(self) -> bool:
         return bool(self.database_url)
 
+    def account_status(self) -> dict[str, Any]:
+        if not self.enabled:
+            return {}
+
+        import psycopg
+        from psycopg.rows import dict_row
+
+        with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        account.id,
+                        account.email_address,
+                        account.status,
+                        account.last_synced_at,
+                        account.last_error,
+                        COUNT(message.id) FILTER (WHERE message.deleted_at IS NULL) AS message_count
+                    FROM email_accounts account
+                    LEFT JOIN email_messages message
+                      ON message.email_account_id = account.id
+                    WHERE account.provider = %(provider)s
+                    GROUP BY account.id
+                    ORDER BY account.last_synced_at DESC NULLS LAST, account.updated_at DESC
+                    LIMIT 1
+                    """,
+                    {"provider": self.provider},
+                )
+                row = cursor.fetchone()
+        return dict(row) if row else {}
+
     def write_messages(
         self,
         *,

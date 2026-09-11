@@ -180,12 +180,14 @@ class SettingsHandlers:
     def auto_assignment_policy(self, request: Request) -> HTMLResponse:
         return self.render_auto_assignment_policy(request)
 
-    def display_mode_toggle(self, request: Request) -> Response:
-        next_demo_mode = not self.request_demo_mode(request)
+    def display_mode_toggle(self, request: Request, display_mode: str = "") -> Response:
+        selected_mode = str(display_mode or request.query_params.get("display_mode") or "").strip().casefold()
+        if selected_mode not in {"demo", "gmail", "naver", "hiworks"}:
+            selected_mode = "demo" if not self.request_demo_mode(request) else "gmail"
         response = Response(status_code=204, headers={"HX-Refresh": "true"})
         response.set_cookie(
             self.display_mode_cookie_name,
-            "demo" if next_demo_mode else "gmail",
+            selected_mode,
             max_age=60 * 60 * 24 * 365,
             httponly=True,
             samesite="lax",
