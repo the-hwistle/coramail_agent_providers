@@ -3,10 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:react": "vite build --config vite.react.config.js",
     "test:e2e": "playwright test",
     "test:e2e:ui-smoke": "playwright test tests/e2e/my-work-monitoring.spec.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "6.1.1",
+    "chart.js": "4.5.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "vite": "8.3.0"
   }
 }

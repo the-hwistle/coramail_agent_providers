@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CoRA Mail AI Router</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app-02.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app-03.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app-04.css?v={{ asset_version }}">
+  <script id="coramail-react-state" type="application/json">{{ react_initial_state | tojson }}</script>
+  <script type="module" src="/static/react/coramail-react.bundle.js?v={{ asset_version }}"></script>
+</head>
+<body>
+  <template id="coramail-react-initial-view">
+    {% include initial_view_template|default("views/dashboard.html") %}
+  </template>
+  <div id="react-root"></div>
+</body>
+</html>
