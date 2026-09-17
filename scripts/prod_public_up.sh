@@ -9,4 +9,4 @@ export CORAMAIL_PROD_COMPOSE_ENV_FILE="$ENV_FILE"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
 
 uv run python -m app.tools.check_deployment_readiness --env-file "$ENV_FILE" --warnings-as-errors
-exec docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml up -d web
+exec docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml --profile edge up -d web edge

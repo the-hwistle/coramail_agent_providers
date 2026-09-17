@@ -22,6 +22,8 @@ services:
       CORAMAIL_DEV_SEED_DEMO: "false"
     ports:
       - "${CORAMAIL_WEB_BIND:-127.0.0.1}:${CORAMAIL_WEB_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - coramail_prod_runtime:/app/data/runtime
       - coramail_prod_paddlex_cache:/tmp/coramail-paddlex-cache
@@ -40,6 +42,39 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+
+  edge:
+    image: ${CORAMAIL_CADDY_IMAGE:-caddy:2.8.4-alpine}
+    profiles:
+      - edge
+    restart: unless-stopped
+    environment:
+      CORAMAIL_BETA_HOST: ${CORAMAIL_BETA_HOST:-}
+    ports:
+      - "${CORAMAIL_EDGE_HTTP_BIND:-0.0.0.0}:${CORAMAIL_EDGE_HTTP_PORT:-80}:80"
+      - "${CORAMAIL_EDGE_HTTPS_BIND:-0.0.0.0}:${CORAMAIL_EDGE_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./config/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - coramail_prod_caddy_data:/data
+      - coramail_prod_caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+  tunnel:
+    image: ${CORAMAIL_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.9.0}
+    profiles:
+      - tunnel
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      web:
+        condition: service_healthy
 
   migrate:
     image: ${CORAMAIL_WEB_IMAGE:?set CORAMAIL_WEB_IMAGE to a tested CoRA Mail image tag}
@@ -93,3 +128,5 @@ volumes:
   coramail_prod_qdrant_data:
   coramail_prod_runtime:
   coramail_prod_paddlex_cache:
+  coramail_prod_caddy_data:
+  coramail_prod_caddy_config:

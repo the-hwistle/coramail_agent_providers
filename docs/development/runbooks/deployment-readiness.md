@@ -2,12 +2,20 @@
 
 ## Current Readiness
 
-CoRA Mail Agent is not ready for direct production deployment as of this repository state. The application has real FastAPI, PostgreSQL, Qdrant, Gmail, local LLM, Mail Decision, work tracking, and UI paths, but the provided Compose stack is still a development stack and the product documents explicitly require further operating-data validation before production claims.
+CoRA Mail Agent is prepared for controlled beta deployment, not for an unrestricted production SLA. The application has real FastAPI, PostgreSQL, Qdrant, Gmail/Naver/Hiworks, local or managed LLM, Mail Decision, work tracking, and UI paths. A real-service beta must still pass the readiness gate, use a pinned image, run explicit migrations, terminate TLS through the production edge profile, and complete operating-data validation before production claims.
+
+Use [Beta Deployment Model](beta-deployment-model.md) before choosing SaaS, private, or hybrid beta topology.
 
 The highest priority is to stop local/demo defaults from being deployable by accident. Run the automated gate before any deployment candidate is promoted:
 
 ```bash
 uv run python -m app.tools.check_deployment_readiness --env-file config/production.env --warnings-as-errors
+```
+
+For automation or deployment handoff reports, use JSON output:
+
+```bash
+uv run python -m app.tools.check_deployment_readiness --env-file config/production.env --warnings-as-errors --format json
 ```
 
 ## Environment Separation
@@ -17,22 +25,67 @@ Development and production use separate Compose projects, environment files, scr
 | Area | Development | Production |
 |---|---|---|
 | Compose file | `docker-compose.yml` | `docker-compose.prod.yml` |
-| Project name | `coramail-agent-dev` | `coramail-agent-prod` |
+| Project name | `coramail-agent-providers-dev` | `coramail-agent-prod` |
 | Environment file | `.env` copied from `.env.example` | `config/production.env` copied from `config/production.env.example` |
 | Scripts | `scripts/dev_*` | `scripts/prod_*` |
 | Source mounting | bind-mounted `.:/app` | no source bind mount; run a tested image |
 | Startup behavior | bootstrap schema and optional demo seed | app starts only after explicit migration |
-| Volumes | `coramail_*` development volumes | `coramail_prod_*` production volumes |
+| Volumes | provider development volumes in `coramail-agent-providers-dev` | `coramail_prod_*` production volumes |
 
 Production startup flow:
 
 ```bash
-cp config/production.env.example config/production.env
+scripts/prod_init_env.sh setup
+scripts/prod_plan.sh
+scripts/prod_preflight.sh
 CORAMAIL_WEB_IMAGE=registry.example.com/coramail-agent:2026-09-03 scripts/prod_build.sh
 scripts/prod_check.sh
 scripts/prod_migrate.sh
 scripts/prod_up.sh
+scripts/prod_smoke.sh
+scripts/prod_external_smoke.sh
 ```
+
+Use `scripts/prod_init_env.sh saas`, `scripts/prod_init_env.sh private`, or `scripts/prod_init_env.sh hybrid` to start from a specific beta track.
+
+Public real-service beta startup flow:
+
+```bash
+scripts/prod_init_env.sh saas
+# Set CORAMAIL_BETA_PUBLIC=true, CORAMAIL_BETA_BASE_URL=https://<beta-host>,
+# CORAMAIL_BETA_HOST=<beta-host>, a pinned CORAMAIL_WEB_IMAGE, secrets, and LLM values.
+scripts/prod_plan.sh
+scripts/prod_preflight.sh
+scripts/prod_check.sh
+scripts/prod_migrate.sh
+scripts/prod_public_up.sh
+scripts/prod_smoke.sh
+scripts/prod_external_smoke.sh
+```
+
+For `scripts/prod_public_up.sh`, point DNS for `CORAMAIL_BETA_HOST` to the deployment host and allow inbound TCP 80 and 443. The `edge` profile starts Caddy, obtains/renews TLS certificates, applies security headers, and proxies to the internal `web:8000` service. `scripts/prod_up.sh` remains available for private/internal deployments where another approved load balancer terminates TLS.
+
+For Cloudflare Named Tunnel beta exposure, create a Cloudflare Tunnel for `CORAMAIL_BETA_HOST`, route the public hostname to `http://web:8000`, store the tunnel token in `CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN`, then run:
+
+```bash
+scripts/prod_tunnel_up.sh
+scripts/prod_smoke.sh
+scripts/prod_external_smoke.sh
+```
+
+Use this instead of ad-hoc `trycloudflare.com` Quick Tunnels. The `tunnel` profile starts a pinned `cloudflare/cloudflared` container in the production Compose project and keeps the app behind Cloudflare without opening host ports 80/443.
+
+`scripts/prod_plan.sh` renders a redacted deployment summary from the selected env file. It is safe for handoff because secret values are reported only as `missing`, `placeholder`, or `configured`.
+
+`scripts/prod_preflight.sh` checks required host commands, production env file permissions, readiness, and Compose config rendering before any migration or service start.
+
+`scripts/prod_migrate.sh` is the explicit schema/vector-store migration step. `scripts/prod_up.sh` only starts the production web service after re-running the readiness gate.
+
+`scripts/prod_public_up.sh` starts both `web` and the `edge` profile. Use it when beta users should access CoRA Mail directly through `CORAMAIL_BETA_BASE_URL`.
+
+`scripts/prod_tunnel_up.sh` starts `web` and the Cloudflare Named Tunnel profile. Use it when Cloudflare terminates public HTTPS and forwards traffic through a named tunnel to the production web service.
+
+`scripts/prod_external_smoke.sh` verifies that `CORAMAIL_BETA_BASE_URL` reaches `/api/health` through the same network path a beta user will use.
 
 Use `CORAMAIL_PROD_ENV_FILE=/path/to/production.env` when the deployment host stores the production env file outside the repository checkout.
 
@@ -51,16 +104,25 @@ The backup script runs the same readiness gate, writes a PostgreSQL custom-forma
    - `CORAMAIL_DEMO_MODE=false`
    - `CORAMAIL_LOCAL_DEV_DEFAULTS=false`
    - `CORAMAIL_DEV_SEED_DEMO=false`
+   - explicit `CORAMAIL_DEPLOYMENT_MODE=setup|saas|private|hybrid`
    - `CORAMAIL_AUTH_ENABLED=true`
    - `CORAMAIL_AUTH_COOKIE_SECURE=true`
    - non-default `CORAMAIL_AUTH_USERNAME`, `CORAMAIL_AUTH_PASSWORD`, `CORAMAIL_AUTH_SECRET`, and `CORAMAIL_POSTGRES_PASSWORD`
+   - explicit `CORAMAIL_BETA_BASE_URL` for the beta sign-in URL
+   - for public beta, `CORAMAIL_BETA_PUBLIC=true`, an HTTPS `CORAMAIL_BETA_BASE_URL`, and matching `CORAMAIL_BETA_HOST`
+   - explicit `CORAMAIL_LLM_RUNTIME=setup|local|managed|external`
+   - external LLM providers require `CORAMAIL_LLM_RUNTIME=external` and `CORAMAIL_EXTERNAL_LLM_APPROVED=true`
+   - private deployments must not use `CORAMAIL_LLM_RUNTIME=external`
+   - explicit `CORAMAIL_MAIL_PROVIDER=setup|gmail|naver|hiworks`
+   - for unified beta, `setup` opens the initial provider selection in the signed-in UI
+   - for fixed Naver or Hiworks deployment, the provider app-password account variables are present
    - explicit PostgreSQL, Qdrant, and LLM endpoints
    - no placeholder Gmail OAuth material
    - no unreviewed external LLM provider for on-premises operation
 
 2. Deployment topology
 
-   Use a production Compose, Kubernetes, or customer-managed service definition separate from `docker-compose.yml`. It must remove bind mounts, development bootstrap side effects, demo seed loading, broad host port exposure, and `:latest` image drift.
+   Use a production Compose, Kubernetes, or customer-managed service definition separate from `docker-compose.yml`. It must remove bind mounts, development bootstrap side effects, demo seed loading, broad host port exposure, and `:latest` image drift. The provided production Compose stack exposes the app through the optional `edge` profile for HTTPS beta traffic.
 
 3. Secret and credential storage
 
@@ -91,6 +153,9 @@ uv run ruff check .
 uv run pytest -q
 npm run test:e2e:ui-smoke
 uv run python -m app.tools.check_deployment_readiness --env-file config/production.env --warnings-as-errors
+scripts/prod_public_up.sh
+scripts/prod_smoke.sh
+scripts/prod_external_smoke.sh
 ```
 
 If any check cannot run in the target environment, record the exact blocker and do not treat the deployment as production-ready.

@@ -27,9 +27,16 @@ def test_dev_scripts_are_shell_syntax_valid_and_executable():
 def test_prod_scripts_are_shell_syntax_valid_and_executable():
     scripts = [
         PROJECT_DIR / "scripts" / "prod_build.sh",
+        PROJECT_DIR / "scripts" / "prod_init_env.sh",
+        PROJECT_DIR / "scripts" / "prod_plan.sh",
+        PROJECT_DIR / "scripts" / "prod_preflight.sh",
         PROJECT_DIR / "scripts" / "prod_check.sh",
         PROJECT_DIR / "scripts" / "prod_migrate.sh",
         PROJECT_DIR / "scripts" / "prod_up.sh",
+        PROJECT_DIR / "scripts" / "prod_public_up.sh",
+        PROJECT_DIR / "scripts" / "prod_tunnel_up.sh",
+        PROJECT_DIR / "scripts" / "prod_smoke.sh",
+        PROJECT_DIR / "scripts" / "prod_external_smoke.sh",
         PROJECT_DIR / "scripts" / "prod_down.sh",
         PROJECT_DIR / "scripts" / "prod_backup.sh",
     ]
@@ -43,7 +50,7 @@ def test_prod_scripts_are_shell_syntax_valid_and_executable():
 def test_compose_runs_web_by_default_and_keeps_stateful_volumes():
     compose = (PROJECT_DIR / "docker-compose.yml").read_text(encoding="utf-8")
 
-    assert "name: coramail-agent-dev" in compose
+    assert "name: coramail-agent-providers-dev" in compose
     assert "web:" in compose
     assert "python -m app.tools.bootstrap_dev_environment" in compose
     assert "python -m uvicorn app.server:app" in compose
@@ -52,7 +59,10 @@ def test_compose_runs_web_by_default_and_keeps_stateful_volumes():
     assert "bootstrap:" in compose
     assert "- tools" in compose
     assert "ollama:" in compose
-    assert "${CORAMAIL_OLLAMA_PORT:-11435}:11434" in compose
+    assert "${CORAMAIL_DEV_PORT:-8030}:${CORAMAIL_DEV_PORT:-8030}" in compose
+    assert "${CORAMAIL_POSTGRES_PORT:-55452}:5432" in compose
+    assert "${CORAMAIL_QDRANT_HTTP_PORT:-6653}:6333" in compose
+    assert "${CORAMAIL_OLLAMA_PORT:-11456}:11434" in compose
     assert "coramail_postgres_data:" in compose
     assert "coramail_qdrant_data:" in compose
     assert "coramail_ollama_data:" in compose
@@ -76,6 +86,17 @@ def test_production_compose_is_independent_from_development_stack():
     assert "${CORAMAIL_WEB_IMAGE:?set CORAMAIL_WEB_IMAGE" in compose
     assert "CORAMAIL_DATABASE_URL: postgresql://${CORAMAIL_POSTGRES_USER" not in compose
     assert "--proxy-headers" in compose
+    assert "host.docker.internal:host-gateway" in compose
+    assert "edge:" in compose
+    assert "- edge" in compose
+    assert "tunnel:" in compose
+    assert "- tunnel" in compose
+    assert "cloudflare/cloudflared:2026.9.0" in compose
+    assert "CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN" in compose
+    assert "caddy:2.8.4-alpine" in compose
+    assert "./config/Caddyfile.production:/etc/caddy/Caddyfile:ro" in compose
+    assert "coramail_prod_caddy_data:" in compose
+    assert "coramail_prod_caddy_config:" in compose
     assert "profiles:" in compose
     assert "- tools" in compose
     assert "python -m app.tools.apply_postgres_schema" in compose
@@ -85,13 +106,16 @@ def test_production_compose_is_independent_from_development_stack():
 def test_env_example_documents_host_and_container_topology():
     env_example = (PROJECT_DIR / ".env.example").read_text(encoding="utf-8")
 
-    assert "CORAMAIL_DATABASE_URL=postgresql://coramail:coramail@127.0.0.1:5432/coramail" in env_example
-    assert "CORAMAIL_QDRANT_URL=http://127.0.0.1:6333" in env_example
+    assert "CORAMAIL_DATABASE_URL=postgresql://coramail:coramail@127.0.0.1:55452/coramail_providers" in env_example
+    assert "CORAMAIL_QDRANT_URL=http://127.0.0.1:6653" in env_example
     assert "CORAMAIL_CONTAINER_LLM_BASE_URL=http://ollama:11434/v1" in env_example
-    assert "CORAMAIL_OLLAMA_PORT=11435" in env_example
+    assert "CORAMAIL_OLLAMA_PORT=11456" in env_example
     assert "CORAMAIL_QDRANT_VECTOR_SIZE=768" in env_example
     assert "CORAMAIL_DEMO_SOURCE=postgres" in env_example
     assert "CORAMAIL_DEV_SEED_DEMO=true" in env_example
+    assert "CORAMAIL_MAIL_PROVIDER=gmail" in env_example
+    assert "CORAMAIL_NAVER_APP_PASSWORD=" in env_example
+    assert "CORAMAIL_HIWORKS_APP_PASSWORD=" in env_example
 
 
 def test_production_env_example_documents_non_dev_defaults():
@@ -100,8 +124,19 @@ def test_production_env_example_documents_non_dev_defaults():
     assert "CORAMAIL_DEMO_MODE=false" in env_example
     assert "CORAMAIL_LOCAL_DEV_DEFAULTS=false" in env_example
     assert "CORAMAIL_DEV_SEED_DEMO=false" in env_example
+    assert "CORAMAIL_DEPLOYMENT_MODE=setup" in env_example
+    assert "CORAMAIL_BETA_PUBLIC=false" in env_example
+    assert "CORAMAIL_BETA_HOST=replace-with-beta-host.example.com" in env_example
+    assert "CORAMAIL_CADDY_IMAGE=caddy:2.8.4-alpine" in env_example
+    assert "CORAMAIL_EDGE_HTTPS_PORT=443" in env_example
+    assert "CORAMAIL_CLOUDFLARED_IMAGE=cloudflare/cloudflared:2026.9.0" in env_example
+    assert "CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN=" in env_example
     assert "CORAMAIL_AUTH_COOKIE_SECURE=true" in env_example
+    assert "CORAMAIL_MAIL_PROVIDER=setup" in env_example
+    assert "CORAMAIL_LLM_RUNTIME=setup" in env_example
+    assert "CORAMAIL_EXTERNAL_LLM_APPROVED=false" in env_example
     assert "CORAMAIL_WEB_IMAGE=registry.example.com/coramail-agent:2026-09-03" in env_example
+    assert "CORAMAIL_BETA_BASE_URL=https://replace-with-beta-host.example.com" in env_example
     assert "CORAMAIL_PROD_BACKUP_DIR=backups/production" in env_example
     assert "CORAMAIL_DATABASE_URL=postgresql://coramail_app:replace-with-random-postgres-password@postgres:5432/coramail" in env_example
     assert "CORAMAIL_QDRANT_URL=http://qdrant:6333" in env_example
@@ -109,6 +144,29 @@ def test_production_env_example_documents_non_dev_defaults():
     assert "GOOGLE_CREDENTIALS_JSON=" in env_example
     assert "GOOGLE_TOKEN_JSON=" in env_example
     assert "GOOGLE_SEND_TOKEN_JSON=" in env_example
+    assert "CORAMAIL_NAVER_MAIL_ADDRESS=" in env_example
+    assert "CORAMAIL_NAVER_APP_PASSWORD=" in env_example
+    assert "CORAMAIL_HIWORKS_MAIL_ADDRESS=" in env_example
+    assert "CORAMAIL_HIWORKS_APP_PASSWORD=" in env_example
+
+
+def test_beta_track_env_examples_document_mode_combinations():
+    examples = {
+        "production.saas.env.example": ("CORAMAIL_DEPLOYMENT_MODE=saas", "CORAMAIL_LLM_RUNTIME=managed"),
+        "production.private.env.example": ("CORAMAIL_DEPLOYMENT_MODE=private", "CORAMAIL_LLM_RUNTIME=local"),
+        "production.hybrid.env.example": ("CORAMAIL_DEPLOYMENT_MODE=hybrid", "CORAMAIL_LLM_RUNTIME=managed"),
+    }
+
+    for filename, expected_lines in examples.items():
+        env_text = (PROJECT_DIR / "config" / filename).read_text(encoding="utf-8")
+        assert "CORAMAIL_MAIL_PROVIDER=setup" in env_text
+        assert "CORAMAIL_WEB_IMAGE=" in env_text
+        assert "CORAMAIL_BETA_BASE_URL=https://" in env_text
+        assert "CORAMAIL_BETA_HOST=" in env_text
+        assert "CORAMAIL_CADDY_IMAGE=caddy:2.8.4-alpine" in env_text
+        assert "CORAMAIL_LLM_BASE_URL=" in env_text
+        for line in expected_lines:
+            assert line in env_text
 
 
 def test_production_secret_file_is_gitignored():
@@ -129,11 +187,119 @@ def test_production_build_script_tags_configured_image():
     assert 'docker build -t "$CORAMAIL_WEB_IMAGE" .' in script
 
 
+def test_production_init_env_script_selects_beta_track_templates():
+    script = (PROJECT_DIR / "scripts" / "prod_init_env.sh").read_text(encoding="utf-8")
+
+    assert "production.saas.env.example" in script
+    assert "production.private.env.example" in script
+    assert "production.hybrid.env.example" in script
+    assert "CORAMAIL_PROD_ENV_FILE" in script
+    assert "CORAMAIL_PROD_INIT_FORCE" in script
+    assert "install -m 600" in script
+
+
 def test_production_scripts_use_tmp_uv_cache_for_readiness_checks():
-    for name in ("prod_check.sh", "prod_migrate.sh", "prod_up.sh", "prod_backup.sh"):
+    for name in (
+        "prod_plan.sh",
+        "prod_preflight.sh",
+        "prod_check.sh",
+        "prod_migrate.sh",
+        "prod_up.sh",
+        "prod_public_up.sh",
+        "prod_tunnel_up.sh",
+        "prod_smoke.sh",
+        "prod_external_smoke.sh",
+        "prod_backup.sh",
+    ):
         script = (PROJECT_DIR / "scripts" / name).read_text(encoding="utf-8")
 
         assert 'UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"' in script
+
+
+def test_production_plan_script_renders_redacted_summary():
+    script = (PROJECT_DIR / "scripts" / "prod_plan.sh").read_text(encoding="utf-8")
+
+    assert "app.tools.render_deployment_plan" in script
+    assert "CORAMAIL_PROD_ENV_FILE" in script
+
+
+def test_production_preflight_script_checks_host_and_compose():
+    script = (PROJECT_DIR / "scripts" / "prod_preflight.sh").read_text(encoding="utf-8")
+
+    assert "require_command uv" in script
+    assert "require_command docker" in script
+    assert "stat -c '%a'" in script
+    assert "docker compose version" in script
+    assert "docker compose --env-file" in script
+    assert "production_preflight=ok" in script
+
+
+def test_deployment_readiness_runbook_documents_json_output():
+    runbook = (PROJECT_DIR / "docs" / "development" / "runbooks" / "deployment-readiness.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--format json" in runbook
+
+
+def test_deployment_readiness_runbook_uses_provider_dev_project_name():
+    runbook = (PROJECT_DIR / "docs" / "development" / "runbooks" / "deployment-readiness.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "coramail-agent-providers-dev" in runbook
+    assert "| Project name | `coramail-agent-dev`" not in runbook
+
+
+def test_production_up_script_does_not_run_migrations():
+    script = (PROJECT_DIR / "scripts" / "prod_up.sh").read_text(encoding="utf-8")
+
+    assert "app.tools.check_deployment_readiness" in script
+    assert "up -d web" in script
+    assert "--profile tools run --rm migrate" not in script
+
+
+def test_production_public_up_script_starts_edge_profile():
+    script = (PROJECT_DIR / "scripts" / "prod_public_up.sh").read_text(encoding="utf-8")
+
+    assert "app.tools.check_deployment_readiness" in script
+    assert "--profile edge up -d web edge" in script
+    assert "CORAMAIL_PROD_COMPOSE_ENV_FILE" in script
+
+
+def test_production_tunnel_up_script_starts_cloudflare_tunnel_profile():
+    script = (PROJECT_DIR / "scripts" / "prod_tunnel_up.sh").read_text(encoding="utf-8")
+
+    assert "app.tools.check_deployment_readiness" in script
+    assert "--profile tunnel up -d web tunnel" in script
+    assert "CORAMAIL_PROD_COMPOSE_ENV_FILE" in script
+
+
+def test_production_caddyfile_proxies_beta_host_to_web():
+    caddyfile = (PROJECT_DIR / "config" / "Caddyfile.production").read_text(encoding="utf-8")
+
+    assert "{$CORAMAIL_BETA_HOST}" in caddyfile
+    assert "reverse_proxy web:8000" in caddyfile
+    assert "Strict-Transport-Security" in caddyfile
+
+
+def test_production_smoke_script_checks_compose_and_health_endpoint():
+    script = (PROJECT_DIR / "scripts" / "prod_smoke.sh").read_text(encoding="utf-8")
+
+    assert "docker compose --env-file" in script
+    assert "exec -T web python" in script
+    assert "http://127.0.0.1:8000/api/health" in script
+    assert "production_smoke=ok" in script
+    assert "CORAMAIL_PROD_SMOKE_ALLOW_DEGRADED" in script
+
+
+def test_production_external_smoke_script_checks_customer_beta_url():
+    script = (PROJECT_DIR / "scripts" / "prod_external_smoke.sh").read_text(encoding="utf-8")
+
+    assert "app.tools.check_deployment_readiness" in script
+    assert "CORAMAIL_BETA_BASE_URL" in script
+    assert "api/health" in script
+    assert "production_external_smoke=ok" in script
 
 
 def test_production_backup_script_captures_postgres_and_qdrant_state():

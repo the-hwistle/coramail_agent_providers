@@ -100,14 +100,31 @@ npm run test:e2e:ui-smoke
 개발 환경과 운영 환경은 분리되어 있다. `docker-compose.yml`과 `scripts/dev_*`는 로컬 개발 전용이며, 운영 후보는 `docker-compose.prod.yml`, `config/production.env`, `scripts/prod_*`만 사용한다.
 
 ```bash
-cp config/production.env.example config/production.env
+scripts/prod_init_env.sh setup
+scripts/prod_plan.sh
+scripts/prod_preflight.sh
 CORAMAIL_WEB_IMAGE=registry.example.com/coramail-agent:2026-09-03 scripts/prod_build.sh
 scripts/prod_check.sh
 scripts/prod_migrate.sh
-scripts/prod_up.sh
+scripts/prod_public_up.sh   # direct HTTPS beta URL with Caddy edge
+# or scripts/prod_up.sh      # private/internal endpoint behind an approved edge
+scripts/prod_smoke.sh
+scripts/prod_external_smoke.sh
 ```
 
 운영 배포 전에는 [`docs/development/runbooks/deployment-readiness.md`](docs/development/runbooks/deployment-readiness.md)의 readiness gate와 최소 검증 명령을 통과해야 한다. `config/production.env`에는 실제 credential이 들어가므로 Git에 커밋하지 않는다.
+
+베타 배포는 SaaS, 고객사 내부망 설치, 하이브리드 구성을 분리해 결정한다. 배포 형태와 LLM 실행 위치 기준은 [`docs/development/runbooks/beta-deployment-model.md`](docs/development/runbooks/beta-deployment-model.md)를 따른다.
+
+베타 트랙별 env 시작점:
+
+- Cloud Beta: `config/production.saas.env.example`
+- Private Beta: `config/production.private.env.example`
+- Hybrid Beta: `config/production.hybrid.env.example`
+
+`scripts/prod_init_env.sh saas|private|hybrid`로 선택한 트랙의 `config/production.env`를 초기화할 수 있다.
+
+실서비스 베타처럼 외부 사용자가 직접 접속해야 하는 경우에는 `CORAMAIL_BETA_PUBLIC=true`, `CORAMAIL_BETA_BASE_URL=https://<beta-host>`, `CORAMAIL_BETA_HOST=<beta-host>`를 설정하고 DNS를 배포 호스트로 연결한 뒤 `scripts/prod_public_up.sh`를 사용한다. 이 경로는 Caddy edge가 TLS와 보안 헤더를 처리하고 내부 `web:8000`으로 프록시한다.
 
 ## 저장소 구조
 
