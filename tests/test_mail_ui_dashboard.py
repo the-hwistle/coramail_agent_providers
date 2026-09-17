@@ -826,6 +826,11 @@ def test_shell_refreshes_current_inbox_after_manual_assignment_completed():
     assert 'document.body.addEventListener("mail-manual-assignment-completed"' in source
     assert 'document.body.addEventListener("mail-read-state-changed"' in source
     assert "function markInboxRowReadOptimistically(row)" in source
+    assert "function replayMailRowClickTransition(row)" in source
+    assert "function handleFavoriteMailClick(event)" in source
+    assert 'document.addEventListener("click", handleFavoriteMailClick, true);' in source
+    assert "replayMailRowClickTransition(dashboardRow);" in source
+    assert "replayMailRowClickTransition(row);" in source
     assert 'indicator.textContent = "drafts";' in source
     assert 'indicator.setAttribute("aria-label", "읽은 메일");' in source
     assert "markInboxRowReadOptimistically(row);" in source
@@ -843,6 +848,9 @@ def test_shell_refreshes_current_inbox_after_manual_assignment_completed():
     assert 'document.body.addEventListener("htmx:configRequest"' in source
     assert 'source.closest("#dashboardMailRows .clickable-row")' in source
     assert "event.detail.parameters.category = activeCategory" in source
+    react_source = Path("app/static/react/coramail-react.js").read_text(encoding="utf-8")
+    assert 'const rows = document.getElementById("dashboardMailRows");' in react_source
+    assert "hydrateFavoriteMailButtons(rows);" in react_source
 
 def test_ui_state_versions_change_when_mail_status_fields_change(monkeypatch):
     rows = [

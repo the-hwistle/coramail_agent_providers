@@ -687,36 +687,38 @@ button.htmx-request {
   white-space: nowrap;
 }
 .mail-status-filter {
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   box-sizing: border-box;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f8fafc;
+  padding: 3px;
+  border: 0;
+  border-radius: 48px;
+  background: #f1f5f9;
 }
 .mail-status-filter-highlight {
   position: absolute;
-  top: 2px;
+  top: 0;
   left: 0;
   z-index: 0;
-  width: var(--mail-status-highlight-width, 0px);
-  height: calc(100% - 4px);
-  border: 1px solid rgba(124, 58, 237, 0.26);
-  border-radius: 6px;
+  box-sizing: border-box;
+  width: var(--mail-status-highlight-width, var(--sliding-tab-width, 0px));
+  height: var(--sliding-tab-height, calc(100% - 4px));
+  border: 0;
+  border-radius: 48px;
   background: #ffffff;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.06),
-    inset 0 0 0 1px rgba(124, 58, 237, 0.06);
-  opacity: var(--mail-status-highlight-opacity, 0);
-  transform: translateX(var(--mail-status-highlight-x, 2px));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  opacity: var(--mail-status-highlight-opacity, var(--sliding-tab-opacity, 0));
+  transform: translate(var(--mail-status-highlight-x, var(--sliding-tab-x, 2px)), var(--sliding-tab-y, 2px));
   transition:
-    transform 180ms ease,
-    width 180ms ease,
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease),
+    height var(--tabs-dur) var(--tabs-ease),
     opacity 120ms ease;
   pointer-events: none;
 }
@@ -724,17 +726,19 @@ button.htmx-request {
   position: relative;
   z-index: 1;
   flex: 0 0 auto;
-  min-height: 28px;
-  padding: 5px 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 48px;
   background: transparent;
-  color: #475569;
+  color: rgba(15, 23, 42, 0.74);
   cursor: pointer;
   font-size: 12px;
   line-height: 16px;
   font-weight: 800;
   white-space: nowrap;
+  transition: color var(--tabs-dur) var(--tabs-ease);
 }
 .dashboard-mail-controls .mail-category-filter.compact {
   flex: 1 1 240px;
@@ -748,6 +752,18 @@ button.htmx-request {
 .mail-status-filter-btn:hover,
 .mail-status-filter-btn.is-active {
   color: var(--secondary);
+}
+.is-sliding-tabs-snapping > [data-sliding-tabs-pill],
+.is-sliding-tabs-snapping > .mail-status-filter-highlight {
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sliding-tabs] > [data-sliding-tabs-pill],
+  .mail-status-filter-btn,
+  .mode-option,
+  .mail-provider-option {
+    transition: none !important;
+  }
 }
 .dashboard-mail-controls .chip-legend {
   margin-bottom: 0;
@@ -2532,7 +2548,7 @@ body.documents-viewport-locked {
 .inbox-list col.mail-read-state-col,
 .inbox-list .mail-read-state-col,
 .inbox-list .mail-read-state-cell {
-  width: 40px;
+  width: 58px;
   min-width: 0;
   padding-left: 8px;
   padding-right: 8px;
@@ -2542,7 +2558,7 @@ body.documents-viewport-locked {
 .dashboard-mail-table col.mail-read-state-col,
 .dashboard-mail-table .mail-read-state-col,
 .dashboard-mail-table .mail-read-state-cell {
-  width: 40px;
+  width: 58px;
   min-width: 0;
   padding-left: 8px;
   padding-right: 8px;

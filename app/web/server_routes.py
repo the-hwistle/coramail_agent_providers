@@ -23,7 +23,9 @@ def build_server_route_router(endpoints: EndpointMap) -> APIRouter:
     router.add_api_route("/login", endpoint("login_form"), methods=["GET"], response_class=HTMLResponse)
     router.add_api_route("/login", endpoint("login_submit"), methods=["POST"], response_class=HTMLResponse)
     router.add_api_route("/logout", endpoint("logout_submit"), methods=["POST"])
-    router.add_api_route("/", endpoint("ui_root"), methods=["GET"], response_class=HTMLResponse)
+    router.add_api_route("/", endpoint("react_shell"), methods=["GET"], response_class=HTMLResponse)
+    router.add_api_route("/react", endpoint("react_shell"), methods=["GET"], response_class=HTMLResponse)
+    router.add_api_route("/legacy", endpoint("ui_root"), methods=["GET"], response_class=HTMLResponse)
 
     router.add_api_route(
         "/ui/my-work/emails/{email_ref}",
@@ -135,6 +137,12 @@ def build_server_route_router(endpoints: EndpointMap) -> APIRouter:
     router.add_api_route(
         "/ui/settings/gmail/tokens",
         endpoint("ui_save_gmail_tokens"),
+        methods=["POST"],
+        response_class=HTMLResponse,
+    )
+    router.add_api_route(
+        "/ui/settings/hiworks/account",
+        endpoint("ui_save_hiworks_account"),
         methods=["POST"],
         response_class=HTMLResponse,
     )

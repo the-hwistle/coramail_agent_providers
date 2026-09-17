@@ -62,11 +62,12 @@
           <div class="mail-status-filter-row dashboard-mail-status-row">
             <label class="sr-only" for="dashboardWorkStatusFilter">진행 상태 필터</label>
             <input type="hidden" id="dashboardWorkStatusFilter" name="status" value="{{ selected_work_status or '' }}">
-            <div class="mail-status-filter dashboard-work-status-filter" aria-label="진행 상태 필터">
-              <span class="mail-status-filter-highlight" aria-hidden="true"></span>
+            <div class="mail-status-filter dashboard-work-status-filter" aria-label="진행 상태 필터" data-sliding-tabs>
+              <span class="mail-status-filter-highlight" data-sliding-tabs-pill aria-hidden="true"></span>
               <button
                 type="button"
                 class="mail-status-filter-btn{% if not selected_work_status %} is-active{% endif %}"
+                data-sliding-tab
                 data-mail-status-filter=""
                 data-mail-status-target="dashboard"
                 aria-pressed="{{ 'true' if not selected_work_status else 'false' }}"
@@ -75,6 +76,7 @@
                 <button
                   type="button"
                   class="mail-status-filter-btn{% if selected_work_status == option['value'] %} is-active{% endif %}"
+                  data-sliding-tab
                   data-mail-status-filter="{{ option['value'] }}"
                   data-mail-status-target="dashboard"
                   aria-pressed="{{ 'true' if selected_work_status == option['value'] else 'false' }}"

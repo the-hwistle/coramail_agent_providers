@@ -14,23 +14,27 @@
     <div class="mail-provider-switch-head">
       <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
       <div>
-        <strong>메일 연동</strong>
+        <strong>{% if mail_provider_source == "setup" %}초기 메일 연동 설정{% else %}메일 연동{% endif %}</strong>
         <span>
-          {% if mail_provider_source == "display" %}
+          {% if mail_provider_source == "setup" %}
+            통합 베타에서 사용할 provider를 선택하세요
+          {% elif mail_provider_source == "display" %}
             상단 선택 기준
           {% elif mail_provider_source == "runtime" %}
-            현재 세션 선택
+            저장된 선택 기준
           {% else %}
             환경 설정 기준
           {% endif %}
         </span>
       </div>
     </div>
-    <div class="mail-provider-options" role="group" aria-label="메일 provider">
+    <div class="mail-provider-options" role="group" aria-label="메일 provider" data-sliding-tabs>
+      <span class="mail-provider-option-pill" data-sliding-tabs-pill aria-hidden="true"></span>
       {% for option in mail_provider_options %}
         <button
           class="mail-provider-option{% if option.value == mail_provider %} is-active{% endif %}"
           type="button"
+          data-sliding-tab
           hx-post="/ui/settings/mail-provider"
           hx-vals='{"provider":"{{ option.value }}"}'
           hx-target="#gmailSyncSettings"
@@ -38,7 +42,6 @@
           aria-pressed="{{ 'true' if option.value == mail_provider else 'false' }}"
         >
           <span>{{ option.label }}</span>
-          <small>{{ option.protocol }}</small>
         </button>
       {% endfor %}
     </div>
@@ -196,6 +199,114 @@
       {% endif %}
     </div>
   </section>
+
+  {% if mail_provider == "hiworks" %}
+    <details class="gmail-advanced-setup mail-account-setup" open>
+    <summary>
+      <span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span>
+      하이웍스 계정 변경
+    </summary>
+    <form
+      class="settings-gmail-form mail-account-form"
+      hx-post="/ui/settings/hiworks/account"
+      hx-target="#gmailSyncSettings"
+      hx-swap="outerHTML"
+    >
+      <div class="mail-account-grid">
+        <label class="settings-gmail-field" for="hiworksMailAddress">
+          <span class="settings-gmail-label">메일 주소</span>
+          <input
+            class="input"
+            id="hiworksMailAddress"
+            name="email_address"
+            type="email"
+            autocomplete="username"
+            value="{{ gmail_sync.email_address or '' }}"
+            placeholder="user@example.com"
+            required
+          >
+        </label>
+        <label class="settings-gmail-field" for="hiworksPop3Username">
+          <span class="settings-gmail-label">POP3 사용자</span>
+          <input
+            class="input"
+            id="hiworksPop3Username"
+            name="pop3_username"
+            type="text"
+            autocomplete="username"
+            value="{{ gmail_sync.pop3_username or gmail_sync.email_address or '' }}"
+            placeholder="user@example.com"
+          >
+        </label>
+        <label class="settings-gmail-field" for="hiworksAppPassword">
+          <span class="settings-gmail-label">메일 전용 비밀번호</span>
+          <input
+            class="input"
+            id="hiworksAppPassword"
+            name="app_password"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </label>
+        <label class="settings-gmail-field" for="hiworksPop3Host">
+          <span class="settings-gmail-label">POP3 서버</span>
+          <input
+            class="input"
+            id="hiworksPop3Host"
+            name="pop3_host"
+            type="text"
+            value="{{ gmail_sync.pop3_host or 'pop3s.hiworks.com' }}"
+            required
+          >
+        </label>
+        <label class="settings-gmail-field" for="hiworksPop3Port">
+          <span class="settings-gmail-label">POP3 포트</span>
+          <input
+            class="input"
+            id="hiworksPop3Port"
+            name="pop3_port"
+            type="number"
+            min="1"
+            max="65535"
+            value="{{ gmail_sync.pop3_port or 995 }}"
+            required
+          >
+        </label>
+        <label class="settings-gmail-field" for="hiworksSmtpHost">
+          <span class="settings-gmail-label">SMTP 서버</span>
+          <input
+            class="input"
+            id="hiworksSmtpHost"
+            name="smtp_host"
+            type="text"
+            value="{{ gmail_sync.smtp_host or 'smtps.hiworks.com' }}"
+            required
+          >
+        </label>
+        <label class="settings-gmail-field" for="hiworksSmtpPort">
+          <span class="settings-gmail-label">SMTP 포트</span>
+          <input
+            class="input"
+            id="hiworksSmtpPort"
+            name="smtp_port"
+            type="number"
+            min="1"
+            max="65535"
+            value="{{ gmail_sync.smtp_port or 465 }}"
+            required
+          >
+        </label>
+      </div>
+      <div class="settings-gmail-actions">
+        <button class="btn secondary" type="submit">
+          <span class="material-symbols-outlined">save</span>
+          계정 저장
+        </button>
+      </div>
+    </form>
+    </details>
+  {% endif %}
 
   {% if mail_provider == "gmail" %}
     <details class="gmail-advanced-setup">

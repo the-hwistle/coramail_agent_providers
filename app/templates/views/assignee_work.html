@@ -301,16 +301,19 @@
         {% if selected_work and current_user_id and selected_work.assignee_user_id and current_user_id == selected_work.assignee_user_id and selected_work.work_status != "completed" %}
           <button
             type="button"
-            class="work-progress-toggle{% if selected_work.work_status == 'in_progress' %} is-active{% endif %}"
+            class="t-toggle work-progress-toggle"
             hx-post="/ui/emails/{{ selected_work.email_uid|urlencode }}/work/in-progress"
             hx-vals='{"active": "{{ "false" if selected_work.work_status == "in_progress" else "true" }}"}'
             hx-swap="none"
             {% if selected_work.work_status not in ["assigned", "acknowledged", "in_progress"] %}disabled aria-disabled="true"{% endif %}
             aria-label="{{ '진행 표시 해제' if selected_work.work_status == 'in_progress' else '진행 표시 설정' }}"
             title="{{ '진행 표시 해제' if selected_work.work_status == 'in_progress' else '진행 표시 설정' }}"
+            data-on="{{ 'true' if selected_work.work_status == 'in_progress' else 'false' }}"
             data-work-in-progress-toggle
+            role="switch"
+            aria-checked="{{ 'true' if selected_work.work_status == 'in_progress' else 'false' }}"
           >
-            <span class="material-symbols-outlined">{{ "toggle_on" if selected_work.work_status == "in_progress" else "toggle_off" }}</span>
+            <span class="t-toggle-thumb" aria-hidden="true"></span>
           </button>
         {% else %}
           <span class="material-symbols-outlined" aria-hidden="true">close</span>

@@ -81,6 +81,37 @@ class AuthRootHandlers:
         session_id: str = "",
         organization: str = "",
     ) -> HTMLResponse:
+        context = self.shell_context(
+            request,
+            view=view,
+            q=q,
+            category=category,
+            limit=limit,
+            email_index=email_index,
+            email_uid=email_uid,
+            selected_email_uid=selected_email_uid,
+            assignee=assignee,
+            status=status,
+            session_id=session_id,
+            organization=organization,
+        )
+        return self.templates.TemplateResponse(request, "shell.html", context)
+
+    def shell_context(
+        self,
+        request: Request,
+        view: str = "dashboard",
+        q: str = "",
+        category: str = "",
+        limit: int = 5,
+        email_index: int = 0,
+        email_uid: str = "",
+        selected_email_uid: str = "",
+        assignee: str = "",
+        status: str = "",
+        session_id: str = "",
+        organization: str = "",
+    ) -> dict[str, Any]:
         active_view = view if view in {"dashboard", "inbox", "monitoring", "ops", "assignees", "my-work", "documents", "address-book", "search", "chats", "settings"} else "dashboard"
         if active_view == "inbox":
             rows = [row for row in self.mail_rows(q=q, category=category) if self.status_matches(row, status.strip())]
@@ -116,4 +147,4 @@ class AuthRootHandlers:
             context = {**self.settings_context(), "request": request, "active_view": active_view, "initial_view_template": "views/settings.html"}
         else:
             context = {**self.dashboard_context(request, status=status), "request": request, "active_view": "dashboard", "initial_view_template": "views/dashboard.html"}
-        return self.templates.TemplateResponse(request, "shell.html", context)
+        return context

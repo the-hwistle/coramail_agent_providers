@@ -68,7 +68,35 @@
     <div class="detail-head">
       <div class="detail-head-copy">
         <span class="label">Selected Mail</span>
-        <h2>{{ email.subject or "(no subject)" }}</h2>
+        <div class="detail-title-row">
+          <h2>{{ email.subject or "(no subject)" }}</h2>
+          <button
+            type="button"
+            class="mail-favorite-toggle detail-favorite-toggle t-like"
+            data-mail-favorite-toggle
+            data-email-uid="{{ email.email_uid }}"
+            data-liked="false"
+            aria-pressed="false"
+            aria-label="즐겨찾기 추가"
+            title="즐겨찾기 추가"
+          >
+            <span class="t-like-icon" aria-hidden="true">
+              <svg class="t-like-star" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M8 1.83333L9.905 5.6925L14.1667 6.31583L11.0833 9.32L11.8108 13.5658L8 11.5617L4.18917 13.5658L4.91667 9.32L1.83333 6.31583L6.095 5.6925L8 1.83333Z"
+                  class="t-like-star-path"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span class="t-like-particles" aria-hidden="true">
+              {% for _ in range(8) %}<i></i>{% endfor %}
+            </span>
+          </button>
+        </div>
         <div class="detail-head-meta" role="group" aria-label="메일 메타 정보">
           <span class="detail-head-sender">
             {{ sender_contact_link(email) }}
@@ -106,14 +134,16 @@
               <input type="hidden" name="active" value="{{ 'false' if work_status == 'in_progress' else 'true' }}">
               <button
                 type="submit"
-                class="btn work-progress-toggle{% if work_status == 'in_progress' %} is-active{% endif %}"
+                class="t-toggle work-progress-toggle"
                 {% if not can_toggle_in_progress %}disabled aria-disabled="true"{% endif %}
                 aria-label="{{ '진행 표시 해제' if work_status == 'in_progress' else '진행 표시 설정' }}"
                 title="{{ '진행 표시 해제' if work_status == 'in_progress' else '진행 표시 설정' }}"
+                data-on="{{ 'true' if work_status == 'in_progress' else 'false' }}"
                 data-work-in-progress-toggle
+                role="switch"
+                aria-checked="{{ 'true' if work_status == 'in_progress' else 'false' }}"
               >
-                <span class="material-symbols-outlined">{{ 'toggle_on' if work_status == 'in_progress' else 'toggle_off' }}</span>
-                진행 표시
+                <span class="t-toggle-thumb" aria-hidden="true"></span>
               </button>
             </form>
             <form

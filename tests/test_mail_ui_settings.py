@@ -48,6 +48,31 @@ def test_work_status_rows_define_distinct_visual_tones():
     for rule in expected_rules:
         assert rule in css
 
+    assert ".t-like[data-liked=\"true\"] .t-like-star path" in css
+    assert "--like-color: #facc15;" in css
+    assert "@keyframes t-like-burst" in css
+    assert "@keyframes mail-row-click-pop" in css
+    assert "@keyframes mail-row-cell-click-pop" in css
+    assert "#mailRows .clickable-row.is-click-transition > td" in css
+    assert "#dashboardMailRows .clickable-row.is-mail-favorite > td:first-child" in css
+    assert "#dashboardMailRows .mail-favorite-toggle" in css
+    assert "pointer-events: auto;" in css
+    assert ".clickable-row.is-click-transition" in css
+    assert ".t-toggle { transition: background var(--toggle-track) var(--toggle-ease); }" in css
+    assert ".t-toggle[data-on=\"true\"] .t-toggle-thumb" in css
+    assert "@keyframes t-toggle-on" in css
+    assert "@keyframes t-toggle-off" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    progress_toggle_css = css.split(".work-progress-toggle {", 1)[1].split("}", 1)[0]
+    detail_progress_toggle_css = css.split(".detail-action-row .work-progress-toggle {", 1)[1].split("}", 1)[0]
+    favorite_toggle_css = css.split(".mail-favorite-toggle {", 1)[1].split("}", 1)[0]
+    assert "border-radius: 999px;" in progress_toggle_css
+    assert "background: #cbd5e1;" in progress_toggle_css
+    assert "width: 34px;" in progress_toggle_css
+    assert "height: 20px;" in progress_toggle_css
+    assert "width: 34px;" in detail_progress_toggle_css
+    assert "background: transparent;" in favorite_toggle_css
+
 
 def test_settings_routing_priority_drag_has_no_drop_target_border_highlight():
     css = _app_css_source()

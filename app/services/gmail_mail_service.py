@@ -74,6 +74,8 @@ class GmailMailboxService:
             if rows or self._last_error:
                 self._run_missing_attachment_analysis_for_rows(rows)
                 return rows
+        if not self.account_repository.public_status().get("connected"):
+            return []
         if not self._messages and not self._last_error:
             self.sync()
         if self.postgres_mailbox is not None:

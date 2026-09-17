@@ -113,7 +113,7 @@ class PostgresMailboxService:
     def _email_detail_payload(self, message: dict[str, Any], index: int) -> dict[str, Any]:
         row = self._message_row(message, index)
         all_attachments = self.repository.attachments_for_message(str(message["id"]), include_inline=True)
-        attachments = self.repository.attachments_for_message(str(message["id"]))
+        attachments = self._visible_attachments(message, all_attachments)
         recipients = self.repository.recipients_for_message(str(message["id"]))
         row.update(
             {
@@ -157,6 +157,20 @@ class PostgresMailboxService:
                 ],
             )
         return plain_email_body_srcdoc(str(message.get("body_text") or ""))
+
+    @staticmethod
+    def _visible_attachments(message: dict[str, Any], attachments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        body_html = str(message.get("body_html") or "").casefold()
+        visible: list[dict[str, Any]] = []
+        for attachment in attachments:
+            if bool(attachment.get("is_inline")):
+                continue
+            content_type = str(attachment.get("content_type") or "").casefold()
+            content_id = str(attachment.get("content_id") or "").strip().strip("<>").casefold()
+            if content_type.startswith("image/") and content_id and f"cid:{content_id}" in body_html:
+                continue
+            visible.append(attachment)
+        return visible
 
     def attachment_path(self, email_index: int, attachment_index: int) -> tuple[Path, str, str] | None:
         message = self.repository.message_by_index(email_index)

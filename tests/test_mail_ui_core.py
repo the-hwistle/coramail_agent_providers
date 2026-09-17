@@ -32,14 +32,37 @@ def test_shell_renders_topbar_display_mode_selector():
     )
 
     assert 'class="mode-selector"' in html
+    assert 'class="mode-selector" role="group" aria-label="메일 데이터 소스 선택" data-sliding-tabs' in html
+    assert 'class="mode-selector-pill" data-sliding-tabs-pill aria-hidden="true"' in html
+    assert html.count("data-sliding-tab") >= 4
     assert 'aria-label="메일 데이터 소스 선택"' in html
     assert 'hx-post="/ui/display-mode/toggle?display_mode=demo"' in html
     assert 'hx-post="/ui/display-mode/toggle?display_mode=gmail"' in html
     assert 'hx-post="/ui/display-mode/toggle?display_mode=naver"' in html
     assert 'hx-post="/ui/display-mode/toggle?display_mode=hiworks"' in html
+    assert "mode-option-protocol" not in html
+    assert ">Fixture<" not in html
+    assert ">API<" not in html
+    mode_selector = html.split('<div class="mode-selector"', 1)[1].split("</div>", 1)[0]
+    assert ">IMAP<" not in mode_selector
+    assert ">POP3<" not in mode_selector
     assert 'aria-pressed="true"' in html
     assert "Evaluation 탭 열기" not in html
     assert "monitoring</span>Evaluation" not in html
+
+
+def test_react_shell_uses_sliding_display_and_fragment_tabs():
+    source = Path("app/static/react/coramail-react.js").read_text(encoding="utf-8")
+
+    assert "function SlidingModeTabs" in source
+    assert '"data-sliding-tabs": true' in source
+    assert 'className: "mode-selector-pill"' in source
+    assert "document.fonts?.ready?.then(snap)" in source
+    assert "updateSlidingTabs(root, true)" in source
+    assert 'document.getElementById(targetName === "dashboard" ? "dashboardWorkStatusFilter" : "workStatusFilter")' in source
+    assert "function LoadingPanel" in source
+    assert "setViewLoading(true)" in source
+    assert "startTransition" not in source
 
 def test_shell_renders_monitoring_navigation():
     html = server.templates.get_template("shell.html").render(
@@ -895,7 +918,8 @@ def test_gmail_settings_modal_refreshes_status_when_opened():
         },
     )
 
-    assert 'fetch("/ui/settings/gmail-sync"' in html
+    assert 'fetch("{{ mail_settings_panel_url }}' not in html
+    assert 'fetch("/ui/settings/gmail-sync"' in html or 'fetch("/ui/settings/naver-sync"' in html or 'fetch("/ui/settings/hiworks-sync"' in html
     assert 'cache: "no-store"' in html
     assert "await refreshGmailSettingsPanel();" in html
     assert "data-gmail-account-label" in html

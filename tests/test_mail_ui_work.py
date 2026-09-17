@@ -105,6 +105,9 @@ def test_inbox_rows_mark_read_mail_only_for_assignee_accounts(monkeypatch):
     assert "is-assignee-read" in assignee_html
     assert "mail-read-indicator" in assignee_html
     assert ">drafts</span>" in assignee_html
+    assert "data-mail-favorite-toggle" in assignee_html
+    assert 'onclick="event.preventDefault(); event.stopPropagation();"' not in assignee_html
+    assert "t-like-star" in assignee_html
     assert 'class="mail-read-state-cell"' in assignee_html
     assert "is-assignee-read" not in unread_assignee_html
     assert 'class="mail-read-state-cell"' in unread_assignee_html
@@ -455,6 +458,9 @@ def test_assignee_work_template_keeps_actions_in_selected_work_panel(monkeypatch
     panel_actions = html.split('<div class="assignee-next-actions" id="assigneeDetailPreview">', 1)[1].split("</div>", 1)[0]
     assert "work-progress-toggle" in panel_head
     assert "data-work-in-progress-toggle" in panel_head
+    assert "t-toggle-thumb" in panel_head
+    assert 'role="switch"' in panel_head
+    assert 'data-on="true"' in panel_head
     assert "data-work-in-progress-toggle" not in panel_actions
     assert "진행중 끄기" not in html
     assert "진행중 켜기" not in html
@@ -743,6 +749,8 @@ def test_dashboard_mail_stream_controls_use_category_select_before_status_filter
     status_filter = 'class="mail-status-filter dashboard-work-status-filter"'
     assert category_select in html
     assert status_filter in html
+    assert 'class="mail-status-filter dashboard-work-status-filter" aria-label="진행 상태 필터" data-sliding-tabs' in html
+    assert 'class="mail-status-filter-highlight" data-sliding-tabs-pill aria-hidden="true"' in html
     assert html.index(category_select) < html.index(status_filter)
     assert "<span data-category-filter-selected-label>업무 유형 전체</span>" in html
     assert 'class="dashboard-category-select-menu"' in html
@@ -750,6 +758,8 @@ def test_dashboard_mail_stream_controls_use_category_select_before_status_filter
     assert '<span class="mail-status-filter-label">진행 상태</span>' not in html
     assert 'class="chip-legend mail-category-filter' not in html
     assert "target instanceof HTMLSelectElement" in source
+    assert "function updateSlidingTabs(scope, snap)" in source
+    assert "function updateSlidingTabHighlight(group, activeButton, snap)" in source
     assert "[data-category-filter-selected-label]" in source
     assert ".dashboard-category-select {" in css
     select_field_css = css.split(".dashboard-category-select-field {", 1)[1].split("}", 1)[0]
@@ -774,7 +784,9 @@ def test_dashboard_mail_stream_controls_use_category_select_before_status_filter
         for block in _css_blocks(css, ".dashboard-mail-table-wrap")
     )
     assert any("z-index: 2;" in block for block in _css_blocks(css, ".dashboard-mail-table thead th"))
-    assert "rgba(124, 58, 237, 0.26)" in status_highlight_css
+    assert "border: 0;" in status_highlight_css
+    assert "border-radius: 48px;" in status_highlight_css
+    assert "background: #ffffff;" in status_highlight_css
     assert "color: var(--secondary);" in status_button_css
 
 
@@ -958,15 +970,39 @@ def test_email_body_cid_images_rewrite_to_inline_attachment_urls():
     assert 'src="/api/emails/mail-1/attachments/0?inline=true"' in rewritten
     assert 'url("/api/emails/mail-1/attachments/1?inline=true")' in rewritten
 
+def test_related_emails_skips_mail_rows_when_message_has_no_business_refs(monkeypatch):
+    def fail_mail_rows(*_args, **_kwargs):
+        raise AssertionError("mail_rows should not be loaded without business refs")
+
+    monkeypatch.setattr(server, "mail_rows", fail_mail_rows)
+
+    assert server.related_emails({"email_uid": "mail-1", "classification": {"business_refs": []}}) == []
+    assert server.related_emails({"email_uid": "mail-1", "classification": {}}) == []
+
+def test_email_body_srcdoc_marks_images_lazy_and_async():
+    srcdoc = email_body_srcdoc(
+        '<p>사진 확인 부탁드립니다.</p><img src="cid:photo"><img src="/signature.png" loading="eager" />',
+        [{"content_id": "photo", "view_url": "/api/emails/mail-1/attachments/0?inline=true"}],
+    )
+
+    assert 'src="/api/emails/mail-1/attachments/0?inline=true" loading="lazy" decoding="async"' in srcdoc
+    assert 'src="/signature.png" loading="eager" decoding="async" />' in srcdoc
+
 def test_postgres_detail_renders_html_body_with_inline_images_excluded_from_attachment_list(tmp_path):
     email_uid = RUN_PAYLOAD["email_message_id"]
     inline_path = tmp_path / "signature.png"
+    referenced_image_path = tmp_path / "logo.png"
     visible_path = tmp_path / "quote.pdf"
     inline_path.write_bytes(b"png")
+    referenced_image_path.write_bytes(b"png")
     visible_path.write_bytes(b"pdf")
 
     class Repository:
+        def __init__(self):
+            self.attachment_calls = []
+
         def attachments_for_message(self, message_id, *, include_inline=False):
+            self.attachment_calls.append(include_inline)
             attachments = [
                 {
                     "id": "inline-1",
@@ -977,6 +1013,16 @@ def test_postgres_detail_renders_html_body_with_inline_images_excluded_from_atta
                     "content_disposition": "inline",
                     "file_size": 3,
                     "is_inline": True,
+                },
+                {
+                    "id": "referenced-image-1",
+                    "filename": "logo.png",
+                    "storage_uri": str(referenced_image_path),
+                    "content_type": "image/png",
+                    "content_id": "logo-image",
+                    "content_disposition": "attachment",
+                    "file_size": 3,
+                    "is_inline": False,
                 },
                 {
                     "id": "attachment-1",
@@ -1004,7 +1050,7 @@ def test_postgres_detail_renders_html_body_with_inline_images_excluded_from_atta
             "sender_address": "buyer@example.invalid",
             "subject": "HTML body",
             "body_text": "Plain fallback",
-            "body_html": '<p><strong>Hello</strong> 😊</p><img src="cid:signature-image">',
+            "body_html": '<p><strong>Hello</strong> 😊</p><img src="cid:signature-image"><img src="cid:logo-image">',
             "snippet": "Plain fallback",
             "sent_at": "2026-08-10T01:00:00+00:00",
             "received_at": "2026-08-10T01:00:00+00:00",
@@ -1016,6 +1062,7 @@ def test_postgres_detail_renders_html_body_with_inline_images_excluded_from_atta
 
     assert detail["attachment_count"] == 1
     assert [item["filename"] for item in detail["attachments"]] == ["quote.pdf"]
+    assert service.repository.attachment_calls == [True]
     assert "<strong>Hello</strong>" in detail["body_html_srcdoc"]
     assert "😊" in detail["body_html_srcdoc"]
     assert f"/api/emails/{email_uid}/attachments/0?inline=true" in detail["body_html_srcdoc"]

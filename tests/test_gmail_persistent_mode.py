@@ -62,7 +62,12 @@ class FakeAccountRepository:
         self.results.append((ok, error))
 
     def public_status(self):
-        return {"email_address": "mailbox@example.invalid"}
+        return {"connected": True, "email_address": "mailbox@example.invalid"}
+
+
+class FakeDisconnectedAccountRepository(FakeAccountRepository):
+    def public_status(self):
+        return {"connected": False, "email_address": "", "last_sync_error": ""}
 
 
 class FakePostgresMailbox:
@@ -258,6 +263,25 @@ def test_gmail_sync_persists_uuid_rows_downloads_attachments_and_runs_initial_an
     assert artifact.storage_uri.endswith("-purchase_order.pdf")
     assert (tmp_path / artifact.storage_uri).read_bytes() == b"pdfdata"
     assert account_repository.results == [(True, "")]
+
+
+def test_gmail_list_emails_does_not_sync_before_account_connection(monkeypatch, tmp_path):
+    mailbox = FakePostgresMailbox()
+    sync_called: list[bool] = []
+    monkeypatch.setattr(
+        gmail_module,
+        "build_gmail_service",
+        lambda *args, **kwargs: sync_called.append(True) or object(),
+    )
+
+    service = GmailMailboxService(
+        tmp_path,
+        FakeDisconnectedAccountRepository(),
+        postgres_mailbox=mailbox,
+    )
+
+    assert service.list_emails() == []
+    assert sync_called == []
 
 
 def test_gmail_sync_backfills_existing_unanalyzed_attachments(monkeypatch, tmp_path):

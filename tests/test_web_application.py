@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from jinja2 import ChainableUndefined
+from pathlib import Path
 
 from app.web.application import build_web_application
 
@@ -27,3 +28,14 @@ def test_build_web_application_registers_static_templates_and_router(tmp_path):
     assert "/static" in route_paths
     assert templates.env.undefined is ChainableUndefined
     assert app.title == "CoRA Mail Agent"
+
+
+def test_template_stylesheets_use_same_origin_static_paths():
+    project_dir = Path(__file__).resolve().parents[1]
+
+    for template_name in ("login.html", "shell.html"):
+        template = (project_dir / "app" / "templates" / template_name).read_text(encoding="utf-8")
+
+        assert "url_for('static'" not in template
+        assert 'url_for("static"' not in template
+        assert 'href="/static/' in template

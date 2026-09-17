@@ -121,20 +121,36 @@ class HiworksMailboxService:
         if self.sync_repository is not None:
             persisted = self.sync_repository.account_status()
             if persisted:
+                persisted_email = str(persisted.get("email_address") or "").strip()
+                configured_email = config.email_address.strip()
+                persisted_matches_config = not configured_email or persisted_email.casefold() == configured_email.casefold()
                 persisted_error = str(persisted.get("last_error") or "")
                 persisted_count = int(persisted.get("message_count") or 0)
-                if not status["last_synced_at"] and persisted.get("last_synced_at"):
+                if persisted_matches_config and not status["last_synced_at"] and persisted.get("last_synced_at"):
                     status["last_synced_at"] = persisted["last_synced_at"]
-                if not status["message_count"] and persisted_count:
+                if persisted_matches_config and not status["message_count"] and persisted_count:
                     status["message_count"] = persisted_count
                     status["preview_count"] = persisted_count
-                if status["version"] == "hiworks:idle" and persisted.get("status") == "active" and not persisted_error:
+                if (
+                    persisted_matches_config
+                    and status["version"] == "hiworks:idle"
+                    and persisted.get("status") == "active"
+                    and not persisted_error
+                ):
                     status["version"] = "hiworks:ok:persisted"
-                if not status["last_error"] and persisted_error:
+                if persisted_matches_config and not status["last_error"] and persisted_error:
                     status["last_error"] = persisted_error
                 if not config.email_address and persisted.get("email_address"):
-                    status["account"] = str(persisted["email_address"])
+                    status["account"] = persisted_email
         return status
+
+    def reset_runtime_status(self) -> None:
+        with self._lock:
+            self._last_error = ""
+            self._last_synced_at = 0.0
+            self._message_count = 0
+            self._preview_count = 0
+            self._version = "hiworks:idle"
 
     def version(self) -> str:
         with self._lock:

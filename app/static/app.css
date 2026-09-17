@@ -1014,8 +1014,8 @@ td { font-size: 13px; line-height: 18px; }
 }
 .mail-read-state-col,
 .mail-read-state-cell {
-  width: 36px;
-  min-width: 36px;
+  width: 54px;
+  min-width: 54px;
   text-align: center;
 }
 .manual-route-col {
@@ -1144,6 +1144,12 @@ td { font-size: 13px; line-height: 18px; }
   line-height: inherit;
   color: #6b7280;
 }
+.mail-read-state-cell {
+  white-space: nowrap;
+}
+.mail-read-state-cell .mail-favorite-toggle + .mail-read-indicator {
+  margin-left: 2px;
+}
 .inbox-sender-cell strong {
   display: inline;
   overflow: hidden;
@@ -1244,11 +1250,26 @@ td { font-size: 13px; line-height: 18px; }
 }
 .truncate { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .truncate.subject-col { max-width: 380px; }
-.clickable-row { cursor: pointer; }
+.clickable-row {
+  cursor: pointer;
+  transform-origin: center;
+  transition:
+    background-color 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 180ms cubic-bezier(0.34, 1.35, 0.64, 1);
+}
 .clickable-row:hover { background: var(--surface-low); }
 .clickable-row.is-selected {
   background: var(--secondary-soft);
   box-shadow: inset 4px 0 0 var(--secondary);
+}
+.clickable-row.is-click-transition {
+  animation: mail-row-click-pop 260ms cubic-bezier(0.34, 1.35, 0.64, 1);
+}
+@keyframes mail-row-click-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(.992); }
+  100% { transform: scale(1); }
 }
 .inbox-list tbody .clickable-row.is-assignee-read {
   background: #f3f4f6;

@@ -136,3 +136,49 @@ def test_render_email_detail_emits_read_state_trigger() -> None:
     )
     assert templates.calls[-1][0] == "partials/email_detail.html"
     assert "mail-read-state-changed" in response.headers["HX-Trigger"]
+
+
+def test_render_email_detail_skips_second_detail_lookup_when_read_state_does_not_change() -> None:
+    templates = TemplatesStub()
+    email = {"email_uid": "mail-1", "work_status": "acknowledged"}
+    calls = []
+
+    response = render_email_detail(
+        _request(),
+        "mail-1",
+        email_detail=lambda _ref: calls.append(_ref) or email,
+        ensure_can_view=lambda *_args: None,
+        mark_mail_read=lambda *_args: {"was_unread": False},
+        ui_globals=lambda *_args: {},
+        related_emails=lambda _email: [],
+        templates=templates,
+    )
+
+    assert calls == ["mail-1"]
+    assert response.headers == {}
+
+
+def test_render_email_detail_refreshes_detail_when_work_status_changes() -> None:
+    templates = TemplatesStub()
+    calls = []
+
+    def email_detail(_ref):
+        calls.append(_ref)
+        if len(calls) == 1:
+            return {"email_uid": "mail-1", "work_status": "assigned"}
+        return {"email_uid": "mail-1", "work_status": "acknowledged"}
+
+    response = render_email_detail(
+        _request(),
+        "mail-1",
+        email_detail=email_detail,
+        ensure_can_view=lambda *_args: None,
+        mark_mail_read=lambda *_args: {"was_unread": True, "work_status_changed": True, "work_status": "acknowledged"},
+        ui_globals=lambda *_args: {},
+        related_emails=lambda _email: [],
+        templates=templates,
+    )
+
+    assert calls == ["mail-1", "mail-1"]
+    assert templates.calls[-1][1]["email"]["work_status"] == "acknowledged"
+    assert "work-item-status-changed" in response.headers["HX-Trigger"]

@@ -69,10 +69,20 @@ def test_naver_settings_sync_uses_naver_service(monkeypatch):
 def test_naver_provider_uses_naver_mail_service_for_inbox(monkeypatch):
     naver_service = SimpleNamespace(list_emails=lambda **kwargs: [{"email_uid": "naver-mail"}])
     gmail_service = SimpleNamespace(list_emails=lambda **kwargs: [{"email_uid": "gmail-mail"}])
+    monkeypatch.setenv("CORAMAIL_MAIL_PROVIDER", "naver")
     monkeypatch.setattr(server, "demo_mode_enabled", lambda: False)
     monkeypatch.setattr(server, "active_mail_provider", lambda: "naver")
     monkeypatch.setattr(server, "_naver_service", naver_service)
     monkeypatch.setattr(server, "_gmail_service", gmail_service)
+
+    assert server.mail_rows()[0]["email_uid"] == "naver-mail"
+
+
+def test_configured_provider_still_uses_selected_mail_service(monkeypatch):
+    naver_service = SimpleNamespace(list_emails=lambda **kwargs: [{"email_uid": "naver-mail"}])
+    monkeypatch.setenv("CORAMAIL_MAIL_PROVIDER", "naver")
+    monkeypatch.setattr(server, "demo_mode_enabled", lambda: False)
+    monkeypatch.setattr(server, "_naver_service", naver_service)
 
     assert server.mail_rows()[0]["email_uid"] == "naver-mail"
 
@@ -96,14 +106,22 @@ def test_mail_provider_settings_panel_renders_provider_choices(monkeypatch):
     html = server.render_mail_sync_settings(request()).body.decode("utf-8")
 
     assert 'hx-post="/ui/settings/mail-provider"' in html
+    assert 'class="mail-provider-options" role="group" aria-label="메일 provider" data-sliding-tabs' in html
+    assert 'class="mail-provider-option-pill" data-sliding-tabs-pill aria-hidden="true"' in html
     assert '{"provider":"gmail"}' in html
     assert '{"provider":"naver"}' in html
     assert '{"provider":"hiworks"}' in html
+    assert "<small>" not in html
+    assert ">API<" not in html
+    assert ">IMAP<" not in html
+    assert ">POP3<" not in html
     assert "환경 설정 기준" in html
 
 
 def test_mail_provider_settings_post_switches_runtime_provider(monkeypatch):
+    env_values: dict[str, str] = {}
     monkeypatch.setattr(server, "_mail_provider_override", None)
+    monkeypatch.setattr(server, "_persist_env_values", lambda path, values: env_values.update(values))
     monkeypatch.setattr(
         server,
         "active_mail_public_status",
@@ -128,8 +146,61 @@ def test_mail_provider_settings_post_switches_runtime_provider(monkeypatch):
     html = response.body.decode("utf-8")
 
     assert server.active_mail_provider() == "naver"
-    assert "Naver Mail 연동 화면으로 전환했습니다." in html
-    assert "상단 선택 기준" in html
+    assert env_values == {"CORAMAIL_MAIL_PROVIDER": "naver"}
+    assert "Naver Mail을 기본 연동으로 저장했습니다." in html
+    assert "환경 설정 기준" in html
+
+
+def test_initial_provider_setup_state_opens_mail_settings_modal(monkeypatch):
+    monkeypatch.setenv("CORAMAIL_MAIL_PROVIDER", "setup")
+    html = server.templates.get_template("shell.html").render(
+        **server.ui_globals(),
+        request=request(),
+        active_view="dashboard",
+        initial_view_template="views/dashboard.html",
+        summary={
+            "email_count": 0,
+            "today_email_count": 0,
+            "classified_count": 0,
+            "routed_count": 0,
+            "attachment_count": 0,
+            "mail_categories": {},
+            "business_labels": {},
+        },
+        emails=[],
+        mail_rows_mode="dashboard",
+        category_timeline={"labels": [], "datasets": {}},
+        routing_overview={
+            "total": 0,
+            "loaded_count": 0,
+            "loaded_percent": 0,
+            "unassigned_count": 0,
+            "unassigned_percent": 0,
+            "assignee_labels": [],
+            "assignee_counts": [],
+            "palette": [],
+        },
+    )
+
+    assert "초기 메일 연동 설정" in html
+    assert "통합 베타에서 사용할 provider를 선택하세요" in html
+    assert "openGmailSettingsModal();" in html
+
+
+def test_initial_provider_setup_state_does_not_probe_gmail(monkeypatch):
+    monkeypatch.setenv("CORAMAIL_MAIL_PROVIDER", "setup")
+    monkeypatch.setattr(server, "demo_mode_enabled", lambda: False)
+    monkeypatch.setattr(
+        server,
+        "_gmail_service",
+        SimpleNamespace(list_emails=lambda **kwargs: (_ for _ in ()).throw(AssertionError("gmail probed"))),
+    )
+
+    assert server.mail_rows() == []
+
+    status = server.active_mail_status()
+    assert status["last_error"] == ""
+    assert status["version"] == "gmail:setup"
 
 
 def test_display_mode_cookie_selects_naver_provider():

@@ -6,9 +6,11 @@
           <div>
             <h2 id="gmailSettingsTitle">{{ mail_provider_label }} Mail 계정 연동 설정</h2>
           </div>
-          <button class="icon-btn" type="button" data-gmail-settings-close aria-label="{{ mail_provider_label }} Mail 동기화 설정 닫기">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+          {% if not mail_provider_setup_required %}
+            <button class="icon-btn" type="button" data-gmail-settings-close aria-label="{{ mail_provider_label }} Mail 동기화 설정 닫기">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          {% endif %}
         </header>
         <div class="gmail-settings-dialog-body">
           {% include "partials/gmail_sync_settings.html" %}

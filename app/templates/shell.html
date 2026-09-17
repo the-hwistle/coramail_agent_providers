@@ -7,10 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v={{ asset_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='app-02.css') }}?v={{ asset_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='app-03.css') }}?v={{ asset_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='app-04.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app-02.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app-03.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/app-04.css?v={{ asset_version }}">
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script id="chartjs-cdn" src="https://cdn.jsdelivr.net/npm/chart.js" async></script>
 </head>
@@ -89,11 +89,13 @@
           {% endif %}
         </div>
         <div class="top-actions">
-          <div class="mode-selector" role="group" aria-label="메일 데이터 소스 선택">
+          <div class="mode-selector" role="group" aria-label="메일 데이터 소스 선택" data-sliding-tabs>
+            <span class="mode-selector-pill" data-sliding-tabs-pill aria-hidden="true"></span>
             {% for option in display_mode_options|default([]) %}
               <button
                 class="mode-option{% if option.value == display_mode %} is-active{% endif %}"
                 type="button"
+                data-sliding-tab
                 hx-post="/ui/display-mode/toggle?display_mode={{ option.value }}"
                 hx-swap="none"
                 title="{{ option.label }} 데이터 보기"
@@ -101,7 +103,6 @@
                 aria-pressed="{{ 'true' if option.value == display_mode else 'false' }}"
               >
                 <span class="mode-option-label">{{ option.label }}</span>
-                <span class="mode-option-protocol">{{ option.protocol }}</span>
               </button>
             {% endfor %}
           </div>

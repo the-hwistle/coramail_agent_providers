@@ -139,8 +139,13 @@ def test_inbox_email_detail_places_work_actions_above_mail_overview_box():
     mail_overview = html.split('<div class="panel mail-overview-panel">', 1)[1].split('<div class="panel mail-decision-inspector">', 1)[0]
 
     assert "detail-delete-btn" in detail_head
+    assert "detail-favorite-toggle" in detail_head
+    assert "t-like-star" in detail_head
     assert "work-progress-toggle" in detail_head
+    assert "t-toggle work-progress-toggle" in detail_head
     assert "data-work-in-progress-toggle" in detail_head
+    assert "t-toggle-thumb" in detail_head
+    assert 'role="switch"' in detail_head
     assert "답장" in detail_head
     assert "업무 완료" in detail_head
     assert detail_head.index("data-work-in-progress-toggle") < detail_head.index("reply-initiate")
@@ -816,7 +821,7 @@ def test_non_dashboard_typography_protects_dense_layouts():
     assignee_table_css = css.rsplit(".assignee-mail-table {", 1)[1].split("}", 1)[0]
     inbox_mobile_css = css.rsplit("@media (max-width: 900px)", 1)[1].split("@media (max-width: 640px)", 1)[0]
 
-    assert "min-width: 860px;" in inbox_table_css
+    assert "min-width: 822px;" in inbox_table_css
     assert "min-width: 1812px;" in ops_table_css
     assert "width: 64px;" in ops_health_col_css
     assert "width: 450px;" in ops_subject_col_css

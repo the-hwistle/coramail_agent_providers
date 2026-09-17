@@ -26,7 +26,104 @@
       trigger: null,
     };
     const CHAT_SESSION_STORAGE_KEY = "coramail.chat.session_id";
+    const FAVORITE_MAIL_STORAGE_KEY = "coramail.favoriteMailUids.v1";
     let copyToastTimer = null;
+
+    function readFavoriteMailUids() {
+      try {
+        const raw = window.localStorage ? window.localStorage.getItem(FAVORITE_MAIL_STORAGE_KEY) : "";
+        const parsed = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []);
+      } catch (error) {
+        return new Set();
+      }
+    }
+
+    function writeFavoriteMailUids(values) {
+      try {
+        if (window.localStorage) window.localStorage.setItem(FAVORITE_MAIL_STORAGE_KEY, JSON.stringify(Array.from(values)));
+      } catch (error) {
+        return;
+      }
+    }
+
+    function setFavoriteButtonState(button, liked) {
+      button.dataset.liked = liked ? "true" : "false";
+      button.setAttribute("aria-pressed", liked ? "true" : "false");
+      button.setAttribute("aria-label", liked ? "즐겨찾기 제거" : "즐겨찾기 추가");
+      button.setAttribute("title", liked ? "즐겨찾기 제거" : "즐겨찾기 추가");
+      const row = button.closest("[data-email-uid]");
+      if (row) row.classList.toggle("is-mail-favorite", liked);
+    }
+
+    function seedLikeParticles(button) {
+      const dots = button.querySelectorAll(".t-like-particles i");
+      dots.forEach(function (dot, index) {
+        const angle = (360 / dots.length) * index + (Math.random() * 2 - 1) * 16;
+        const mag = 20 * (0.68 + Math.random() * 0.5);
+        const rad = (angle * Math.PI) / 180;
+        const style = dot.style;
+        style.setProperty("--px", `${(Math.cos(rad) * mag).toFixed(2)}px`);
+        style.setProperty("--py", `${(Math.sin(rad) * mag).toFixed(2)}px`);
+        style.setProperty("--pdur", `calc(var(--like-particle-dur) * ${(0.78 + Math.random() * 0.44).toFixed(3)})`);
+        style.setProperty("--pdelay", `${Math.round(Math.random() * 70)}ms`);
+        style.setProperty("--p-end-scale", (0.35 + Math.random() * 0.4).toFixed(2));
+        style.setProperty("--psize", (0.6 + Math.random() * 0.8).toFixed(2));
+      });
+    }
+
+    function replayMailRowClickTransition(row) {
+      if (!row) return;
+      row.classList.remove("is-click-transition");
+      void row.offsetWidth;
+      row.classList.add("is-click-transition");
+      window.setTimeout(function () {
+        row.classList.remove("is-click-transition");
+      }, 320);
+    }
+
+    function hydrateFavoriteMailButtons(root) {
+      const favorites = readFavoriteMailUids();
+      const scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll("[data-mail-favorite-toggle][data-email-uid]").forEach(function (button) {
+        setFavoriteButtonState(button, favorites.has(String(button.dataset.emailUid || "")));
+      });
+    }
+
+    function toggleFavoriteMail(button) {
+      const emailUid = String(button.dataset.emailUid || "");
+      if (!emailUid) return;
+      replayMailRowClickTransition(button.closest("#mailRows .clickable-row[data-email-uid], #dashboardMailRows .clickable-row[data-email-uid]"));
+      const favorites = readFavoriteMailUids();
+      const liked = !favorites.has(emailUid);
+      if (liked) favorites.add(emailUid);
+      else favorites.delete(emailUid);
+      writeFavoriteMailUids(favorites);
+      document.querySelectorAll(`[data-mail-favorite-toggle][data-email-uid="${CSS.escape(emailUid)}"]`).forEach(function (item) {
+        item.classList.remove("is-bursting");
+        setFavoriteButtonState(item, liked);
+      });
+      if (liked) {
+        seedLikeParticles(button);
+        void button.offsetWidth;
+        button.classList.add("is-bursting");
+      }
+    }
+
+    function handleFavoriteMailClick(event) {
+      const favoriteButton = event.target instanceof Element ? event.target.closest("[data-mail-favorite-toggle]") : null;
+      if (!favoriteButton) return;
+      event.preventDefault();
+      event.stopPropagation();
+      toggleFavoriteMail(favoriteButton);
+    }
+
+    function initializeProgressToggles(root) {
+      const scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll("[data-work-in-progress-toggle].t-toggle").forEach(function (button) {
+        button.classList.remove("is-init");
+      });
+    }
 
     function mainViewHistoryUrl(fragmentUrl) {
       const requestUrl = new URL(fragmentUrl || "/", window.location.origin);
@@ -233,7 +330,9 @@
         setActiveMainNav(navButtonForPath(requestUrl.pathname));
         setMainNavigationBusy(true);
         if (requestUrl.pathname === "/ui/inbox") {
-          markInboxRowReadOptimistically(source.closest("#dashboardMailRows .clickable-row[data-email-uid]"));
+          const dashboardRow = source.closest("#dashboardMailRows .clickable-row[data-email-uid]");
+          replayMailRowClickTransition(dashboardRow);
+          markInboxRowReadOptimistically(dashboardRow);
         }
       }
 
@@ -245,6 +344,7 @@
       if (targetSelector === "#email-detail") {
         const row = source.closest("#mailRows .clickable-row[data-email-index][data-email-uid]");
         if (row) {
+          replayMailRowClickTransition(row);
           selectInboxRow(row);
           renderPendingInboxDetail(row);
         }
@@ -1460,7 +1560,7 @@
       applyDashboardMailStatFilter();
     }
 
-    function updateMailStatusFilterButtons(scope) {
+    function updateMailStatusFilterButtons(scope, snap) {
       const root = scope instanceof Element ? scope : document;
       const groups = root.matches && root.matches(".mail-status-filter")
         ? [root]
@@ -1478,18 +1578,50 @@
           button.setAttribute("aria-pressed", isActive ? "true" : "false");
           if (isActive) activeButton = button;
         });
-        updateSlidingFilterHighlight(group, activeButton);
+        updateSlidingFilterHighlight(group, activeButton, snap);
       });
     }
 
     function updateSlidingFilterHighlight(group, activeButton) {
+      updateSlidingTabHighlight(group, activeButton, arguments[2]);
+    }
+
+    function updateSlidingTabHighlight(group, activeButton, snap) {
       if (!(group instanceof HTMLElement) || !(activeButton instanceof HTMLElement)) return;
+      if (snap) group.classList.add("is-sliding-tabs-snapping");
       const groupRect = group.getBoundingClientRect();
       const buttonRect = activeButton.getBoundingClientRect();
       const x = buttonRect.left - groupRect.left;
+      const y = buttonRect.top - groupRect.top;
+      const width = buttonRect.width;
+      const height = buttonRect.height;
+      group.style.setProperty("--sliding-tab-x", `${Math.round(x)}px`);
+      group.style.setProperty("--sliding-tab-y", `${Math.round(y)}px`);
+      group.style.setProperty("--sliding-tab-width", `${Math.round(width)}px`);
+      group.style.setProperty("--sliding-tab-height", `${Math.round(height)}px`);
+      group.style.setProperty("--sliding-tab-opacity", "1");
       group.style.setProperty("--mail-status-highlight-x", `${Math.round(x)}px`);
-      group.style.setProperty("--mail-status-highlight-width", `${Math.round(buttonRect.width)}px`);
+      group.style.setProperty("--mail-status-highlight-width", `${Math.round(width)}px`);
       group.style.setProperty("--mail-status-highlight-opacity", "1");
+      if (snap) {
+        void group.offsetWidth;
+        group.classList.remove("is-sliding-tabs-snapping");
+      }
+    }
+
+    function updateSlidingTabs(scope, snap) {
+      const root = scope instanceof Element ? scope : document;
+      const groups = root.matches && root.matches("[data-sliding-tabs]")
+        ? [root]
+        : Array.from(root.querySelectorAll("[data-sliding-tabs]"));
+      groups.forEach(function (group) {
+        if (!(group instanceof HTMLElement)) return;
+        if (group.classList.contains("mail-status-filter") || group.classList.contains("mail-category-filter")) return;
+        const activeButton =
+          group.querySelector("[data-sliding-tab].is-active") ||
+          group.querySelector("[data-sliding-tab][aria-pressed='true']");
+        updateSlidingTabHighlight(group, activeButton, snap);
+      });
     }
 
     function updateCategoryFilterButtons(scope) {
@@ -1623,6 +1755,17 @@
     document.addEventListener("click", function (event) {
       const target = event.target;
       if (!(target instanceof Element)) return;
+      const slidingButton = target.closest("[data-sliding-tab]");
+      if (slidingButton instanceof HTMLElement) {
+        const slidingGroup = slidingButton.closest("[data-sliding-tabs]");
+        if (slidingGroup instanceof HTMLElement && !slidingButton.matches("[data-mail-status-filter]")) {
+          slidingGroup.querySelectorAll("[data-sliding-tab]").forEach(function (button) {
+            button.classList.toggle("is-active", button === slidingButton);
+            button.setAttribute("aria-pressed", button === slidingButton ? "true" : "false");
+          });
+          updateSlidingTabHighlight(slidingGroup, slidingButton);
+        }
+      }
       const button = target.closest("[data-mail-status-filter]");
       if (!(button instanceof HTMLElement)) return;
       event.preventDefault();
@@ -1640,8 +1783,9 @@
     });
 
     document.body.addEventListener("htmx:afterSwap", function (event) {
-      updateMailStatusFilterButtons(event.detail.target);
+      updateMailStatusFilterButtons(event.detail.target, true);
       updateCategoryFilterButtons(event.detail.target);
+      updateSlidingTabs(event.detail.target, true);
       initDocumentTypeIconPickers(event.detail.target);
       if (event.detail.target && event.detail.target.id === "dashboardMailRows" && window.applyCategoryFilter) {
         window.applyCategoryFilter((window.categoryFilterState && window.categoryFilterState.activeCategory) || "__all__");
@@ -2984,6 +3128,7 @@
         if (!response.ok) return;
         body.innerHTML = await response.text();
         if (window.htmx) htmx.process(body);
+        updateSlidingTabs(body, true);
         const accountLabel = body.querySelector("#gmailSyncSettings")?.dataset.gmailAccountLabel;
         const bannerValue = document.querySelector("[data-gmail-settings-open] .gmail-account-value");
         if (accountLabel && bannerValue) bannerValue.textContent = accountLabel;
@@ -2998,6 +3143,9 @@
       await refreshGmailSettingsPanel();
       modal.hidden = false;
       document.body.classList.add("gmail-settings-open");
+      window.requestAnimationFrame(function () {
+        updateSlidingTabs(modal, true);
+      });
       const dialog = modal.querySelector(".gmail-settings-dialog");
       if (dialog) dialog.focus({ preventScroll: true });
     }
@@ -3038,6 +3186,10 @@
         closeGmailSettingsModal();
       }
     });
+
+    {% if mail_provider_setup_required %}
+    openGmailSettingsModal();
+    {% endif %}
     {% endif %}
 
     function manualRouteConfirmModal() {
@@ -3175,6 +3327,8 @@
       installResponsiveHtmxControls(event.detail.target);
       initDocumentTypeIconPickers(event.detail.target);
       hydrateChatSessionInputs(event.detail.target);
+      hydrateFavoriteMailButtons(event.detail.target);
+      initializeProgressToggles(event.detail.target);
 
       if (event.detail.target.id === "main-panel") {
         const requestPath = event.detail.requestConfig.path || "";
@@ -3698,9 +3852,18 @@
       window.alert(message);
     });
 
+    document.addEventListener("click", handleFavoriteMailClick, true);
+
     document.body.addEventListener("htmx:beforeRequest", function (event) {
       const source = event.detail.elt;
       if (!(source instanceof HTMLElement)) return;
+      if (source.matches("[data-work-in-progress-toggle].t-toggle")) {
+        const activeValue = source.closest("form")?.querySelector("input[name='active']")?.value || "";
+        const nextOn = activeValue ? activeValue === "true" : source.dataset.on !== "true";
+        source.classList.add("is-init");
+        source.dataset.on = nextOn ? "true" : "false";
+        source.setAttribute("aria-checked", nextOn ? "true" : "false");
+      }
       reflectImmediateHtmxState(event);
       if (source.matches("[data-classification-regenerate-button]")) {
         source.classList.remove("route-now-btn--ready", "route-now-btn--sent", "route-now-btn--failed", "route-now-btn--unassigned");
@@ -4002,6 +4165,8 @@
       installSearchFormFallback();
       installSearchExamples();
       hydrateChatSessionInputs(document);
+      hydrateFavoriteMailButtons(document);
+      initializeProgressToggles(document);
       limitInboxRows();
       syncInboxSelection();
       initDashboardDistribution(document);
@@ -4011,14 +4176,20 @@
       initOpsInteractions(document);
       initAssigneeDetailDrawerInteractions(document);
       initChatEmailDrawerInteractions(document);
-      updateMailStatusFilterButtons(document);
+      updateMailStatusFilterButtons(document, true);
       updateCategoryFilterButtons(document);
+      updateSlidingTabs(document, true);
       resizeEmailBodyFrames(document);
       syncDashboardViewportMode();
       resetUiSync();
       scheduleManualRoutePoll(1500);
       prefetchDemoMainViews();
       window.setInterval(checkClientVersion, 15000);
+      window.addEventListener("resize", function () {
+        updateMailStatusFilterButtons(document, true);
+        updateCategoryFilterButtons(document);
+        updateSlidingTabs(document, true);
+      });
     });
 
     window.addEventListener("resize", limitInboxRows);

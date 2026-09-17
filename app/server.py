@@ -214,6 +214,7 @@ app, templates = build_web_application(
 def current_asset_version() -> str:
     paths = [APP_DIR / "server.py"]
     paths.extend(STATIC_DIR.rglob("*.css"))
+    paths.extend(STATIC_DIR.rglob("*.js"))
     paths.extend(TEMPLATES_DIR.rglob("*.html"))
     existing_paths = [path for path in paths if path.exists()]
     if not existing_paths:
@@ -427,9 +428,16 @@ def active_provider_label() -> str:
 
 
 def active_mail_provider_source() -> str:
+    if mail_provider_setup_required():
+        return "setup"
     if _display_mail_provider.get():
         return "display"
     return "runtime" if _mail_provider_override else "environment"
+
+
+def mail_provider_setup_required() -> bool:
+    configured = os.getenv("CORAMAIL_MAIL_PROVIDER", "").strip().casefold()
+    return configured in {"", "setup"}
 
 
 def mail_provider_options() -> list[dict[str, str]]:
@@ -449,7 +457,21 @@ def active_provider_service() -> GmailMailboxService | NaverMailboxService | Hiw
     return _gmail_service
 
 
+def _setup_mail_status() -> dict[str, Any]:
+    provider = active_mail_provider()
+    return {
+        "account": f"{provider_label(provider)} Mail 계정 미설정",
+        "last_error": "",
+        "last_synced_at": 0,
+        "message_count": 0,
+        "preview_count": 0,
+        "version": f"{provider}:setup",
+    }
+
+
 def active_mail_status() -> dict[str, Any]:
+    if mail_provider_setup_required():
+        return _setup_mail_status()
     return active_provider_service().status()
 
 
@@ -500,6 +522,8 @@ def mail_rows(
     category: str = "",
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
+    if (not demo_mode_enabled()) and mail_provider_setup_required():
+        return []
     try:
         return attach_sender_contacts(mail_service().list_emails(q=q, category=category, limit=limit))
     except Exception as exc:
@@ -813,6 +837,7 @@ def ui_globals(request: Request | None = None) -> dict[str, object]:
         "mail_provider_options": mail_provider_options(),
         "display_mode_options": display_mode_options(),
         "mail_provider_source": active_mail_provider_source(),
+        "mail_provider_setup_required": (not demo_mode_enabled()) and mail_provider_setup_required(),
         "mail_settings_panel_url": active_mail_settings_panel_url(),
         "gmail_sync": active_mail_public_status(),
         "gmail_settings_message": "",
@@ -1056,6 +1081,61 @@ def ui_root(
         status=status,
         session_id=session_id,
         organization=organization,
+    )
+
+
+def react_shell(
+    request: Request,
+    view: str = "dashboard",
+    q: str = "",
+    category: str = "",
+    limit: int = 5,
+    email_index: int = 0,
+    email_uid: str = "",
+    selected_email_uid: str = "",
+    assignee: str = "",
+    status: str = "",
+    session_id: str = "",
+    organization: str = "",
+) -> Response:
+    if not is_authenticated(request):
+        return auth_required_response(request)
+    shell_context = _auth_root_handlers().shell_context(
+        request,
+        view=view,
+        q=q,
+        category=category,
+        limit=limit,
+        email_index=email_index,
+        email_uid=email_uid,
+        selected_email_uid=selected_email_uid,
+        assignee=assignee,
+        status=status,
+        session_id=session_id,
+        organization=organization,
+    )
+    globals_context = {**ui_globals(request), **shell_context}
+    active_view = str(globals_context.get("active_view") or "dashboard")
+    return templates.TemplateResponse(
+        request,
+        "react_shell.html",
+        {
+            **globals_context,
+            "request": request,
+            "active_view": active_view,
+            "react_initial_state": {
+                "activeView": active_view,
+                "currentUser": globals_context["current_user"],
+                "currentUserCanViewAllAssignees": globals_context["current_user_can_view_all_assignees"],
+                "demoMode": globals_context["demo_mode"],
+                "displayMode": globals_context["display_mode"],
+                "displayModeOptions": globals_context["display_mode_options"],
+                "gmailConnectedAccount": globals_context["gmail_connected_account"],
+                "mailProviderSetupRequired": globals_context["mail_provider_setup_required"],
+                "mailProviderLabel": globals_context["mail_provider_label"],
+                "mailSettingsPanelUrl": globals_context["mail_settings_panel_url"],
+            },
+        },
     )
 
 
@@ -1366,15 +1446,16 @@ async def ui_settings_mail_provider(request: Request) -> HTMLResponse:
     allowed = {str(option["value"]) for option in MAIL_PROVIDER_OPTIONS}
     if provider not in allowed:
         return render_mail_sync_settings(request, error="지원하지 않는 메일 연동입니다.")
-    _mail_provider_override = None if provider == mail_provider() else provider
-    token = _display_mail_provider.set(provider)
     try:
-        response = render_mail_sync_settings(
-            request,
-            message=f"{active_provider_label()} Mail 연동 화면으로 전환했습니다.",
-        )
-    finally:
-        _display_mail_provider.reset(token)
+        _persist_env_values(ACTIVE_ENV_PATH, {"CORAMAIL_MAIL_PROVIDER": provider})
+    except (OSError, ValueError) as exc:
+        return render_mail_sync_settings(request, error=f"메일 연동 선택을 저장하지 못했습니다: {exc}")
+    os.environ["CORAMAIL_MAIL_PROVIDER"] = provider
+    _mail_provider_override = None if provider == mail_provider() else provider
+    response = render_mail_sync_settings(
+        request,
+        message=f"{active_provider_label()} Mail을 기본 연동으로 저장했습니다.",
+    )
     response.set_cookie(
         DISPLAY_MODE_COOKIE_NAME,
         provider,
@@ -1393,6 +1474,57 @@ async def ui_save_gmail_client_config(request: Request) -> HTMLResponse:
 
 async def ui_save_gmail_tokens(request: Request) -> HTMLResponse:
     return await _settings_handlers().save_gmail_tokens(request)
+
+
+async def ui_save_hiworks_account(request: Request) -> HTMLResponse:
+    form = _urlencoded_form(await request.body())
+    email_address = str(form.get("email_address") or "").strip()
+    pop3_username = str(form.get("pop3_username") or "").strip()
+    app_password = str(form.get("app_password") or "").strip()
+    pop3_host = str(form.get("pop3_host") or "").strip() or "pop3s.hiworks.com"
+    pop3_port = str(form.get("pop3_port") or "").strip() or "995"
+    smtp_host = str(form.get("smtp_host") or "").strip() or "smtps.hiworks.com"
+    smtp_port = str(form.get("smtp_port") or "").strip() or "465"
+    if not email_address:
+        return render_mail_sync_settings(request, error="하이웍스 메일 주소를 입력하세요.")
+    if not app_password:
+        return render_mail_sync_settings(request, error="하이웍스 메일 전용 비밀번호를 입력하세요.")
+    try:
+        int(pop3_port)
+        int(smtp_port)
+    except ValueError:
+        return render_mail_sync_settings(request, error="POP3/SMTP 포트는 숫자로 입력하세요.")
+
+    values = {
+        "CORAMAIL_HIWORKS_MAIL_ADDRESS": email_address,
+        "CORAMAIL_HIWORKS_POP3_USERNAME": pop3_username or email_address,
+        "CORAMAIL_HIWORKS_APP_PASSWORD": app_password,
+        "CORAMAIL_HIWORKS_POP3_HOST": pop3_host,
+        "CORAMAIL_HIWORKS_POP3_PORT": pop3_port,
+        "CORAMAIL_HIWORKS_SMTP_HOST": smtp_host,
+        "CORAMAIL_HIWORKS_SMTP_PORT": smtp_port,
+    }
+    try:
+        _persist_env_values(ACTIVE_ENV_PATH, values)
+    except ValueError as exc:
+        return render_mail_sync_settings(request, error=str(exc))
+    for key, value in values.items():
+        os.environ[key] = value
+    _hiworks_service.reset_runtime_status()
+    token = _display_mail_provider.set("hiworks")
+    try:
+        response = render_mail_sync_settings(request, message="하이웍스 계정 설정을 저장했습니다.")
+    finally:
+        _display_mail_provider.reset(token)
+    response.set_cookie(
+        DISPLAY_MODE_COOKIE_NAME,
+        "hiworks",
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=AUTH_COOKIE_SECURE,
+        samesite="lax",
+    )
+    return response
 
 
 
@@ -2883,6 +3015,35 @@ def _urlencoded_form(body: bytes) -> dict[str, str]:
     return {key: values[-1] if values else "" for key, values in parsed.items()}
 
 
+def _persist_env_values(env_path: Path, values: dict[str, str]) -> None:
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    remaining = dict(values)
+    updated_lines: list[str] = []
+    for line in existing_lines:
+        stripped = line.strip()
+        key = stripped.split("=", 1)[0].strip() if "=" in stripped and not stripped.startswith("#") else ""
+        if key in remaining:
+            updated_lines.append(f"{key}={_dotenv_value(remaining.pop(key))}")
+        else:
+            updated_lines.append(line)
+    if remaining and updated_lines and updated_lines[-1].strip():
+        updated_lines.append("")
+    for key, value in remaining.items():
+        updated_lines.append(f"{key}={_dotenv_value(value)}")
+    env_path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
+
+
+def _dotenv_value(value: str) -> str:
+    if "\n" in value or "\r" in value:
+        raise ValueError("설정값에는 줄바꿈을 넣을 수 없습니다.")
+    if "'" not in value:
+        return f"'{value}'"
+    if '"' not in value:
+        return f'"{value}"'
+    raise ValueError("설정값에는 작은따옴표와 큰따옴표를 동시에 넣을 수 없습니다.")
+
+
 def inbox_context(
     request: Request | None = None,
     *,
@@ -3543,6 +3704,8 @@ def dashboard_context(request: Request | None = None, *, status: str = "") -> di
         "mail_rows_mode": "dashboard",
         "dashboard_reference_day": reference_day.isoformat(),
         "selected_work_status": selected_status,
+        "category_distribution": summary,
+        "category_distribution_all": summary,
         "category_timeline": category_timeline(rows),
         "routing_overview": routing_overview(rows),
         "my_work_aging": my_work_aging_summary,
@@ -4131,7 +4294,9 @@ def routing_table_response(request: Request) -> HTMLResponse:
 
 def related_emails(email: dict[str, object]) -> list[dict[str, object]]:
     classification = email.get("classification") if isinstance(email.get("classification"), dict) else {}
-    refs = {str(ref) for ref in classification.get("business_refs", [])}
+    refs = {str(ref).strip() for ref in classification.get("business_refs", []) if str(ref).strip()}
+    if not refs:
+        return []
     uid = str(email.get("email_uid") or "")
     related = []
     for row in mail_rows():
@@ -4211,12 +4376,14 @@ app.include_router(
             "ui_naver_settings_sync": ui_naver_settings_sync,
             "ui_naver_sync_settings": ui_naver_sync_settings,
             "ui_receive_latest_duplicate_demo_mail": ui_receive_latest_duplicate_demo_mail,
+            "react_shell": react_shell,
             "ui_root": ui_root,
             "ui_route_email_manual": ui_route_email_manual,
             "ui_routing_summary": ui_routing_summary,
             "ui_routing_table": ui_routing_table,
             "ui_save_gmail_client_config": ui_save_gmail_client_config,
             "ui_save_gmail_tokens": ui_save_gmail_tokens,
+            "ui_save_hiworks_account": ui_save_hiworks_account,
             "ui_search": ui_search,
             "ui_search_results": ui_search_results,
             "ui_settings": ui_settings,

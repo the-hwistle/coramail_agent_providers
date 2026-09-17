@@ -122,8 +122,30 @@ def rewrite_email_body_cid_images(body_html: str, attachments: list[dict[str, An
     return html_body
 
 
+def accelerate_email_body_images(body_html: str) -> str:
+    html_body = str(body_html or "")
+    if not html_body:
+        return ""
+
+    def add_loading_hints(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        lower_tag = tag.casefold()
+        insert = ""
+        if " loading=" not in lower_tag:
+            insert += ' loading="lazy"'
+        if " decoding=" not in lower_tag:
+            insert += ' decoding="async"'
+        if not insert:
+            return tag
+        if tag.endswith("/>"):
+            return f"{tag[:-2].rstrip()}{insert} />"
+        return f"{tag[:-1]}{insert}>"
+
+    return re.sub(r"<img\b[^>]*>", add_loading_hints, html_body, flags=re.IGNORECASE)
+
+
 def email_body_srcdoc(body_html: str, attachments: list[dict[str, Any]]) -> str:
-    body = rewrite_email_body_cid_images(body_html, attachments)
+    body = accelerate_email_body_images(rewrite_email_body_cid_images(body_html, attachments))
     if not body:
         return ""
     return f"""<!doctype html>

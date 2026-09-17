@@ -24,12 +24,13 @@ def build_attachment_response(
     path, filename, media_type = resolved
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="첨부파일 원본이 존재하지 않습니다.")
+    cache_control = "private, max-age=3600" if inline and not download else "no-store"
     return FileResponse(
         path=path,
         media_type=media_type,
         filename=filename,
         content_disposition_type="attachment" if download else "inline",
-        headers={"Cache-Control": "no-store"},
+        headers={"Cache-Control": cache_control},
     )
 
 

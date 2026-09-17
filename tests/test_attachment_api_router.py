@@ -27,8 +27,26 @@ def test_attachment_response_preserves_inline_and_cache_headers(tmp_path: Path) 
         ),
     )
     assert response.media_type == "application/pdf"
-    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["cache-control"] == "private, max-age=3600"
     assert response.headers["content-disposition"].startswith("inline;")
+
+
+def test_attachment_download_response_keeps_no_store_cache_header(tmp_path: Path) -> None:
+    path = tmp_path / "quote.pdf"
+    path.write_bytes(b"pdf")
+    response = build_attachment_response(
+        "mail-1",
+        0,
+        download=True,
+        inline=True,
+        resolve_attachment=lambda email_ref, index, **kwargs: (
+            path,
+            "quote.pdf",
+            "application/pdf",
+        ),
+    )
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["content-disposition"].startswith("attachment;")
 
 
 def test_attachment_response_maps_missing_resolution_to_not_found() -> None:

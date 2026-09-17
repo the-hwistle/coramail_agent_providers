@@ -77,7 +77,8 @@ def render_email_detail(
         raise HTTPException(status_code=404, detail="이메일을 찾을 수 없습니다.")
     ensure_can_view(request, email)
     read_result = mark_mail_read(request, email)
-    email = email_detail(email_ref) or email
+    if read_result and (read_result.get("was_unread") or read_result.get("work_status_changed")):
+        email = email_detail(email_ref) or email
     response = templates.TemplateResponse(
         request,
         template_name,
