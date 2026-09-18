@@ -826,11 +826,11 @@ def test_shell_refreshes_current_inbox_after_manual_assignment_completed():
     assert 'document.body.addEventListener("mail-manual-assignment-completed"' in source
     assert 'document.body.addEventListener("mail-read-state-changed"' in source
     assert "function markInboxRowReadOptimistically(row)" in source
-    assert "function replayMailRowClickTransition(row)" in source
+    assert "function replayMailRowClickTransition(row)" not in source
     assert "function handleFavoriteMailClick(event)" in source
     assert 'document.addEventListener("click", handleFavoriteMailClick, true);' in source
-    assert "replayMailRowClickTransition(dashboardRow);" in source
-    assert "replayMailRowClickTransition(row);" in source
+    assert "replayMailRowClickTransition(dashboardRow);" not in source
+    assert "replayMailRowClickTransition(row);" not in source
     assert 'indicator.textContent = "drafts";' in source
     assert 'indicator.setAttribute("aria-label", "읽은 메일");' in source
     assert "markInboxRowReadOptimistically(row);" in source

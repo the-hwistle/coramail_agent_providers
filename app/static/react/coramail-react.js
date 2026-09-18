@@ -141,6 +141,8 @@ function swapTarget(target, html, swap) {
     window.requestAnimationFrame(() => {
       hydrateFavoriteMailButtons(document);
       initializeProgressToggles(document);
+      limitInboxRows();
+      syncInboxSelection();
       updateSlidingTabs(document, true);
       initDashboardCharts(document);
     });
@@ -150,6 +152,8 @@ function swapTarget(target, html, swap) {
   window.requestAnimationFrame(() => {
     hydrateFavoriteMailButtons(target);
     initializeProgressToggles(target);
+    limitInboxRows();
+    syncInboxSelection();
     updateSlidingTabs(target, true);
     initDashboardCharts(target);
   });
@@ -242,6 +246,86 @@ function hydrateFavoriteMailButtons(root = document) {
   });
 }
 
+function limitInboxRows() {
+  const wrap = document.querySelector(".inbox-table-wrap");
+  if (!wrap) return;
+  wrap.style.removeProperty("height");
+
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  if (!viewportHeight) return;
+
+  const header = wrap.querySelector("thead");
+  const sampleRow = wrap.querySelector("#mailRows .clickable-row");
+  const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+  const rowHeight = sampleRow ? Math.ceil(sampleRow.getBoundingClientRect().height) : 0;
+  const rowsVisibleAroundSelection = 6;
+  const rowsBasedHeight = rowHeight ? headerHeight + rowHeight * rowsVisibleAroundSelection + 2 : 0;
+  const viewportBasedHeight = Math.round(Math.min(Math.max(viewportHeight * 0.44, 420), 680));
+  const preferredHeight = rowsBasedHeight || viewportBasedHeight;
+  wrap.style.height = `${preferredHeight}px`;
+}
+
+function centerInboxRow(row, smooth = false) {
+  const wrap = document.querySelector(".inbox-table-wrap");
+  if (!row || !wrap) return;
+
+  const wrapRect = wrap.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const header = wrap.querySelector("thead");
+  const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+  const rowTop = rowRect.top - wrapRect.top + wrap.scrollTop;
+  const rowCenter = rowTop + row.offsetHeight / 2;
+  const visibleHeight = Math.max(wrap.clientHeight - headerHeight, row.offsetHeight);
+  wrap.scrollTo({
+    top: Math.max(rowCenter - headerHeight - visibleHeight / 2, 0),
+    behavior: smooth ? "smooth" : "auto",
+  });
+}
+
+function markInboxRowReadOptimistically(row) {
+  if (!row) return;
+  const indicator = row.querySelector(".mail-read-state-cell .mail-read-indicator");
+  if (!indicator) return;
+  row.classList.add("is-assignee-read");
+  indicator.textContent = "drafts";
+  indicator.setAttribute("title", "읽은 메일");
+  indicator.setAttribute("aria-label", "읽은 메일");
+}
+
+function selectInboxRow(row, { smooth = true } = {}) {
+  if (!row) return;
+
+  const selectedIndex = document.getElementById("selectedEmailIndex");
+  const selectedUid = document.getElementById("selectedEmailUid");
+  if (selectedIndex) selectedIndex.value = row.dataset.emailIndex || "";
+  if (selectedUid) selectedUid.value = row.dataset.emailUid || "";
+
+  document.querySelectorAll("#mailRows .clickable-row[data-email-uid]").forEach((candidate) => {
+    candidate.classList.toggle("is-selected", candidate === row);
+  });
+  markInboxRowReadOptimistically(row);
+  centerInboxRow(row, smooth);
+}
+
+function syncInboxSelection({ center = true } = {}) {
+  const selectedIndex = document.getElementById("selectedEmailIndex");
+  const selectedUid = document.getElementById("selectedEmailUid");
+  const detailCard = document.querySelector("#email-detail .detail-card[data-email-index][data-email-uid]");
+  const uid = detailCard?.dataset.emailUid || selectedUid?.value || "";
+  const index = detailCard?.dataset.emailIndex || selectedIndex?.value || "";
+  if (selectedIndex) selectedIndex.value = index;
+  if (selectedUid) selectedUid.value = uid;
+  if (!uid && !index) return;
+
+  let selectedRow = null;
+  document.querySelectorAll("#mailRows .clickable-row[data-email-index][data-email-uid]").forEach((row) => {
+    const isSelected = uid ? row.dataset.emailUid === uid : row.dataset.emailIndex === index;
+    row.classList.toggle("is-selected", isSelected);
+    if (isSelected) selectedRow = row;
+  });
+  if (center && selectedRow) centerInboxRow(selectedRow);
+}
+
 function toggleFavoriteMail(button) {
   const emailUid = String(button.dataset.emailUid || "");
   if (!emailUid) return;
@@ -274,6 +358,19 @@ function initializeProgressToggles(root = document) {
   root.querySelectorAll?.("[data-work-in-progress-toggle].t-toggle").forEach((button) => {
     button.classList.remove("is-init");
   });
+}
+
+function primeWorkProgressToggle(button) {
+  const input = button.closest("form")?.querySelector("input[name='active']");
+  const nextOn = input?.value ? input.value === "true" : button.dataset.on !== "true";
+  button.classList.add("is-init");
+  button.dataset.on = nextOn ? "true" : "false";
+  button.setAttribute("aria-checked", nextOn ? "true" : "false");
+}
+
+function prepareNextWorkProgressToggleValue(button) {
+  const input = button.closest("form")?.querySelector("input[name='active']");
+  if (input) input.value = button.dataset.on === "true" ? "false" : "true";
 }
 
 function MaterialIcon({ children }) {
@@ -810,6 +907,9 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
       if (!trigger) return;
       const clickedMailRow = trigger.closest?.("#mailRows .clickable-row[data-email-uid], #dashboardMailRows .clickable-row[data-email-uid]");
       replayMailRowClickTransition(clickedMailRow);
+      if (clickedMailRow?.closest("#mailRows") && targetFor(trigger)?.id === "email-detail") {
+        selectInboxRow(clickedMailRow);
+      }
       if (trigger.matches("[data-gmail-settings-open]")) {
         event.preventDefault();
         openMailSettings();
@@ -900,18 +1000,18 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
       if (!trigger.matches("[hx-get], [hx-post]")) return;
       event.preventDefault();
       if (trigger.matches("[data-work-in-progress-toggle].t-toggle")) {
-        const activeValue = trigger.closest("form")?.querySelector("input[name='active']")?.value || "";
-        const nextOn = activeValue ? activeValue === "true" : trigger.dataset.on !== "true";
-        trigger.classList.add("is-init");
-        trigger.dataset.on = nextOn ? "true" : "false";
-        trigger.setAttribute("aria-checked", nextOn ? "true" : "false");
+        primeWorkProgressToggle(trigger);
       }
       const message = trigger.getAttribute("hx-confirm");
       if (message) {
         setConfirm({ element: trigger, message, title: trigger.dataset.mailDeleteButton ? "메일을 삭제할까요?" : "진행할까요?", submitLabel: trigger.dataset.mailDeleteButton ? "삭제" : "확인", icon: trigger.dataset.mailDeleteButton ? "delete" : "check" });
         return;
       }
-      submitRequest(trigger).catch((error) => setError(error.message || "Request failed"));
+      const request = submitRequest(trigger);
+      if (trigger.matches("[data-work-in-progress-toggle].t-toggle")) {
+        prepareNextWorkProgressToggleValue(trigger);
+      }
+      request.catch((error) => setError(error.message || "Request failed"));
     };
     const onSubmit = (event) => {
       const form = event.target;
@@ -919,13 +1019,13 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
       event.preventDefault();
       const progressToggle = form.querySelector("[data-work-in-progress-toggle].t-toggle");
       if (progressToggle) {
-        const activeValue = form.querySelector("input[name='active']")?.value || "";
-        const nextOn = activeValue ? activeValue === "true" : progressToggle.dataset.on !== "true";
-        progressToggle.classList.add("is-init");
-        progressToggle.dataset.on = nextOn ? "true" : "false";
-        progressToggle.setAttribute("aria-checked", nextOn ? "true" : "false");
+        primeWorkProgressToggle(progressToggle);
       }
-      submitRequest(form).catch((error) => setError(error.message || "Request failed"));
+      const request = submitRequest(form);
+      if (progressToggle) {
+        prepareNextWorkProgressToggleValue(progressToggle);
+      }
+      request.catch((error) => setError(error.message || "Request failed"));
     };
     const onChange = (event) => {
       const element = event.target;
@@ -1065,6 +1165,8 @@ function App() {
     if (!root) return;
     hydrateFavoriteMailButtons(root);
     initializeProgressToggles(root);
+    limitInboxRows();
+    syncInboxSelection();
     updateSlidingTabs(root, true);
     initDashboardCharts(root);
     loadTriggerElements(root).forEach((element) => {
@@ -1073,6 +1175,11 @@ function App() {
       submitRequest(element).catch((loadError) => setError(loadError.message || "Request failed"));
     });
   }, [html, submitRequest]);
+
+  useEffect(() => {
+    window.addEventListener("resize", limitInboxRows);
+    return () => window.removeEventListener("resize", limitInboxRows);
+  }, []);
 
   useEffect(() => {
     const root = settingsBodyRef.current;

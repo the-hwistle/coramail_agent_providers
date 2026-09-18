@@ -255,6 +255,19 @@ def test_address_book_cards_do_not_force_mobile_horizontal_overflow():
     assert "white-space: nowrap;" in email_block
 
 
+def test_sender_contact_link_hit_target_is_limited_to_sender_name():
+    css = Path("app/static/app-04.css").read_text(encoding="utf-8")
+
+    sender_cell_rule = css.split(".dashboard-sender-cell .sender-contact,", 1)[1].split("}", 1)[0]
+    declarations = {line.strip() for line in sender_cell_rule.splitlines() if line.strip()}
+
+    assert "width: auto;" in declarations
+    assert "max-width: 100%;" in declarations
+    assert "width: 100%;" not in declarations
+    assert ".sender-contact:hover .sender-contact-popover" not in css
+    assert ".sender-contact-link:hover + .sender-contact-popover" in css
+
+
 def test_shell_has_address_book_navigation():
     html = server.templates.get_template("shell.html").render(
         **ui_context(),

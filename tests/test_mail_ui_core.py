@@ -59,6 +59,16 @@ def test_react_shell_uses_sliding_display_and_fragment_tabs():
     assert 'className: "mode-selector-pill"' in source
     assert "document.fonts?.ready?.then(snap)" in source
     assert "updateSlidingTabs(root, true)" in source
+    assert "function selectInboxRow(row" in source
+    assert "function syncInboxSelection(" in source
+    assert "centerInboxRow(selectedRow)" in source
+    assert "function primeWorkProgressToggle(button)" in source
+    assert "function prepareNextWorkProgressToggleValue(button)" in source
+    assert "const input = button.closest(\"form\")?.querySelector(\"input[name='active']\");" in source
+    assert 'if (input) input.value = button.dataset.on === "true" ? "false" : "true";' in source
+    assert "primeWorkProgressToggle(progressToggle)" in source
+    assert "prepareNextWorkProgressToggleValue(progressToggle)" in source
+    assert "targetFor(trigger)?.id === \"email-detail\"" in source
     assert 'document.getElementById(targetName === "dashboard" ? "dashboardWorkStatusFilter" : "workStatusFilter")' in source
     assert "function LoadingPanel" in source
     assert "setViewLoading(true)" in source

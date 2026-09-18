@@ -56,32 +56,6 @@
       if (row) row.classList.toggle("is-mail-favorite", liked);
     }
 
-    function seedLikeParticles(button) {
-      const dots = button.querySelectorAll(".t-like-particles i");
-      dots.forEach(function (dot, index) {
-        const angle = (360 / dots.length) * index + (Math.random() * 2 - 1) * 16;
-        const mag = 20 * (0.68 + Math.random() * 0.5);
-        const rad = (angle * Math.PI) / 180;
-        const style = dot.style;
-        style.setProperty("--px", `${(Math.cos(rad) * mag).toFixed(2)}px`);
-        style.setProperty("--py", `${(Math.sin(rad) * mag).toFixed(2)}px`);
-        style.setProperty("--pdur", `calc(var(--like-particle-dur) * ${(0.78 + Math.random() * 0.44).toFixed(3)})`);
-        style.setProperty("--pdelay", `${Math.round(Math.random() * 70)}ms`);
-        style.setProperty("--p-end-scale", (0.35 + Math.random() * 0.4).toFixed(2));
-        style.setProperty("--psize", (0.6 + Math.random() * 0.8).toFixed(2));
-      });
-    }
-
-    function replayMailRowClickTransition(row) {
-      if (!row) return;
-      row.classList.remove("is-click-transition");
-      void row.offsetWidth;
-      row.classList.add("is-click-transition");
-      window.setTimeout(function () {
-        row.classList.remove("is-click-transition");
-      }, 320);
-    }
-
     function hydrateFavoriteMailButtons(root) {
       const favorites = readFavoriteMailUids();
       const scope = root && root.querySelectorAll ? root : document;
@@ -93,21 +67,14 @@
     function toggleFavoriteMail(button) {
       const emailUid = String(button.dataset.emailUid || "");
       if (!emailUid) return;
-      replayMailRowClickTransition(button.closest("#mailRows .clickable-row[data-email-uid], #dashboardMailRows .clickable-row[data-email-uid]"));
       const favorites = readFavoriteMailUids();
       const liked = !favorites.has(emailUid);
       if (liked) favorites.add(emailUid);
       else favorites.delete(emailUid);
       writeFavoriteMailUids(favorites);
       document.querySelectorAll(`[data-mail-favorite-toggle][data-email-uid="${CSS.escape(emailUid)}"]`).forEach(function (item) {
-        item.classList.remove("is-bursting");
         setFavoriteButtonState(item, liked);
       });
-      if (liked) {
-        seedLikeParticles(button);
-        void button.offsetWidth;
-        button.classList.add("is-bursting");
-      }
     }
 
     function handleFavoriteMailClick(event) {
@@ -123,6 +90,21 @@
       scope.querySelectorAll("[data-work-in-progress-toggle].t-toggle").forEach(function (button) {
         button.classList.remove("is-init");
       });
+    }
+
+    function primeWorkProgressToggle(button) {
+      const input = button.closest("form")?.querySelector("input[name='active']");
+      const nextOn = input?.value ? input.value === "true" : button.dataset.on !== "true";
+      button.classList.add("is-init");
+      button.dataset.on = nextOn ? "true" : "false";
+      button.setAttribute("aria-checked", nextOn ? "true" : "false");
+      button.dataset.nextActiveValue = nextOn ? "false" : "true";
+    }
+
+    function prepareNextWorkProgressToggleValue(button) {
+      const input = button.closest("form")?.querySelector("input[name='active']");
+      if (input && button.dataset.nextActiveValue) input.value = button.dataset.nextActiveValue;
+      delete button.dataset.nextActiveValue;
     }
 
     function mainViewHistoryUrl(fragmentUrl) {
@@ -331,7 +313,6 @@
         setMainNavigationBusy(true);
         if (requestUrl.pathname === "/ui/inbox") {
           const dashboardRow = source.closest("#dashboardMailRows .clickable-row[data-email-uid]");
-          replayMailRowClickTransition(dashboardRow);
           markInboxRowReadOptimistically(dashboardRow);
         }
       }
@@ -344,7 +325,6 @@
       if (targetSelector === "#email-detail") {
         const row = source.closest("#mailRows .clickable-row[data-email-index][data-email-uid]");
         if (row) {
-          replayMailRowClickTransition(row);
           selectInboxRow(row);
           renderPendingInboxDetail(row);
         }
@@ -3858,11 +3838,7 @@
       const source = event.detail.elt;
       if (!(source instanceof HTMLElement)) return;
       if (source.matches("[data-work-in-progress-toggle].t-toggle")) {
-        const activeValue = source.closest("form")?.querySelector("input[name='active']")?.value || "";
-        const nextOn = activeValue ? activeValue === "true" : source.dataset.on !== "true";
-        source.classList.add("is-init");
-        source.dataset.on = nextOn ? "true" : "false";
-        source.setAttribute("aria-checked", nextOn ? "true" : "false");
+        primeWorkProgressToggle(source);
       }
       reflectImmediateHtmxState(event);
       if (source.matches("[data-classification-regenerate-button]")) {
@@ -4119,6 +4095,13 @@
       } else if (syncType === "email") {
         const display = document.querySelector(`[data-assignee-display-email="${assigneeId}"]`);
         if (display) display.textContent = value;
+      }
+    });
+
+    document.body.addEventListener("htmx:afterRequest", function (event) {
+      const source = event.detail.elt;
+      if (source instanceof HTMLElement && source.matches("[data-work-in-progress-toggle].t-toggle")) {
+        prepareNextWorkProgressToggleValue(source);
       }
     });
 
