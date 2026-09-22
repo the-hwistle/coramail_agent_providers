@@ -103,7 +103,9 @@ Before a production migration or version rollout, capture a backup from the runn
 scripts/prod_backup.sh
 ```
 
-The backup script runs the same readiness gate, writes a PostgreSQL custom-format `pg_dump`, creates and downloads a Qdrant collection snapshot, and stores a small manifest under `CORAMAIL_PROD_BACKUP_DIR` (default `backups/production`). This directory is ignored by Git and must be copied to the customer-approved backup location after creation. If Qdrant is protected with an API key, set `CORAMAIL_QDRANT_API_KEY` in the production environment file.
+The backup script runs the same readiness gate, writes a PostgreSQL custom-format `pg_dump`, archives `/app/data/runtime` as `runtime.tar.gz`, creates and downloads a Qdrant collection snapshot, and stores a small manifest under `CORAMAIL_PROD_BACKUP_DIR` (default `backups/production`). This directory is ignored by Git and must be copied to the customer-approved backup location after creation. The runtime archive contains mail attachment originals and may contain credentials; handle the entire backup as sensitive data. If Qdrant is protected with an API key, set `CORAMAIL_QDRANT_API_KEY` in the production environment file.
+
+When restoring a PostgreSQL dump that contains `email_attachments.storage_uri`, restore the matching `runtime.tar.gz` into the web service's `/app/data/runtime` volume before serving mail. Verify that every active attachment URI resolves to a file in that volume. Restoring the database alone leaves historical inline images and attachment downloads returning 404.
 
 ## Priority Order
 
@@ -138,7 +140,7 @@ The backup script runs the same readiness gate, writes a PostgreSQL custom-forma
 
 4. Database migration and backup
 
-   Replace startup-time development bootstrapping with an explicit migration runbook, least-privilege database roles, backup/restore checks, and rollback criteria. `scripts/prod_migrate.sh` applies PostgreSQL schema and ensures the configured Qdrant collection exists; it does not load demo seed data. `scripts/prod_backup.sh` captures PostgreSQL and Qdrant state before migrations or rollout changes.
+   Replace startup-time development bootstrapping with an explicit migration runbook, least-privilege database roles, backup/restore checks, and rollback criteria. `scripts/prod_migrate.sh` applies PostgreSQL schema and ensures the configured Qdrant collection exists; it does not load demo seed data. `scripts/prod_backup.sh` captures PostgreSQL, runtime files, and Qdrant state before migrations or rollout changes.
 
 5. Runtime SLO validation
 

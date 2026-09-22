@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -26,6 +27,15 @@ docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml exec -T postgre
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-acl' \
   >"$BACKUP_DIR/postgres.dump"
 
+docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml exec -T web python - \
+  >"$BACKUP_DIR/runtime.tar.gz" <<'PY'
+import sys
+import tarfile
+
+with tarfile.open(fileobj=sys.stdout.buffer, mode="w|gz") as archive:
+    archive.add("/app/data/runtime", arcname="runtime")
+PY
+
 docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml --profile tools run --rm \
   -v "$BACKUP_DIR_ABS:/backup" \
   migrate \
@@ -35,6 +45,7 @@ cat >"$BACKUP_DIR/manifest.txt" <<EOF
 created_at=$TIMESTAMP
 env_file=$ENV_FILE
 postgres_dump=postgres.dump
+runtime_archive=runtime.tar.gz
 qdrant_collection=$QDRANT_COLLECTION
 EOF
 
