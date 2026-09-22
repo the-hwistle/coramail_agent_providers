@@ -329,6 +329,20 @@ def test_production_backup_script_captures_postgres_and_qdrant_state():
     assert "manifest.txt" in script
 
 
+def test_production_restore_drill_is_isolated_and_checks_every_backup_layer():
+    script = (PROJECT_DIR / "scripts" / "prod_restore_drill.sh").read_text(encoding="utf-8")
+
+    assert "verify_production_backup" in script
+    assert 'PREFIX="coramail-restore-drill-' in script
+    assert "pg_restore" in script
+    assert "restore_qdrant_snapshot" in script
+    assert 'RUNTIME_VOLUME="$PREFIX-runtime"' in script
+    assert "verified_attachment_count" in script
+    assert "empty-runtime-verification" in script
+    assert script.count("docker run --rm -i") == 2
+    assert "docker compose down" not in script
+
+
 def test_dockerfile_keeps_virtualenv_outside_bind_mount():
     dockerfile = (PROJECT_DIR / "Dockerfile").read_text(encoding="utf-8")
 

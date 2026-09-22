@@ -107,6 +107,17 @@ The backup script runs the same readiness gate, writes a PostgreSQL custom-forma
 
 Before reporting success, the backup command runs `python -m app.tools.verify_production_backup`. The verifier rejects a missing or non-custom-format PostgreSQL dump, an unsafe or empty runtime archive, a missing manifest field, and a missing or ambiguous Qdrant snapshot. Operators can rerun it against a copied backup directory before a restore drill.
 
+Run an isolated restore drill against the latest backup, or pass a specific backup directory:
+
+```bash
+scripts/prod_restore_drill.sh
+scripts/prod_restore_drill.sh backups/production/20260922T053317Z
+```
+
+The drill creates a uniquely named Docker network and separate PostgreSQL, Qdrant, and runtime volumes. It restores the PostgreSQL custom dump, uploads the Qdrant snapshot, restores runtime originals, and checks every active attachment against its stored size and SHA-256 checksum. It does not attach to the production Compose network or volumes and removes drill resources on exit. Set `CORAMAIL_RESTORE_DRILL_KEEP=true` only when the isolated resources must remain for manual inspection.
+
+The 2026-09-22 drill restored 2,374 email rows and verified all 171 active attachment rows with zero missing, size, or checksum errors. The restored Qdrant collection was green with the same zero-point count as the production collection. Production smoke remained healthy after cleanup.
+
 When restoring a PostgreSQL dump that contains `email_attachments.storage_uri`, restore the matching `runtime.tar.gz` into the web service's `/app/data/runtime` volume before serving mail. Verify that every active attachment URI resolves to a file in that volume. Restoring the database alone leaves historical inline images and attachment downloads returning 404.
 
 ## Priority Order
@@ -165,6 +176,7 @@ uv run ruff check .
 uv run pytest -q
 npm run test:e2e:ui-smoke
 uv run python -m app.tools.check_deployment_readiness --env-file config/production.env --warnings-as-errors
+scripts/prod_restore_drill.sh
 scripts/prod_public_up.sh
 scripts/prod_smoke.sh
 scripts/prod_external_smoke.sh
