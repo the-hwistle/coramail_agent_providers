@@ -22,6 +22,14 @@ def build_system_router(
     def client_version() -> dict[str, str]:
         return {"version": asset_version()}
 
+    @router.get("/api/release")
+    def release_endpoint() -> dict[str, str]:
+        payload = health()
+        return {
+            "version": asset_version(),
+            "status": str(payload.get("status") or "degraded"),
+        }
+
     @router.get("/api/ui-state")
     def ui_state_endpoint(
         request: Request,
