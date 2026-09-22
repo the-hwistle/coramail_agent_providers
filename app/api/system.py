@@ -44,6 +44,11 @@ def build_system_router(
 
     @router.get("/api/health")
     def health_endpoint() -> dict[str, object]:
+        payload = health()
+        return {"status": str(payload.get("status") or "degraded")}
+
+    @router.get("/api/health/details")
+    def health_details_endpoint() -> dict[str, object]:
         return health()
 
     return router

@@ -153,6 +153,7 @@ from app.ui.monitoring import build_monitoring_ui_router  # noqa: E402
 from app.ui.documents import build_documents_ui_router  # noqa: E402
 from app.ui.mail_display import build_mail_display_ui_router  # noqa: E402
 from app.web.server_routes import build_server_route_router  # noqa: E402
+from app.web.security import add_security_headers, request_origin_allowed  # noqa: E402
 
 DISPLAY_MODE_COOKIE_NAME = os.getenv("CORAMAIL_DISPLAY_MODE_COOKIE_NAME", "coramail_display_mode")
 GMAIL_OAUTH_STATE_COOKIE_NAME = os.getenv("CORAMAIL_GMAIL_OAUTH_STATE_COOKIE_NAME", "coramail_gmail_oauth_state")
@@ -614,10 +615,13 @@ async def set_display_mode_context(request: Request, call_next) -> Response:
 
 @app.middleware("http")
 async def require_ui_auth(request: Request, call_next) -> Response:
+    if not request_origin_allowed(request):
+        logger.warning("cross_origin_mutation_blocked path=%s", request.url.path)
+        return add_security_headers(Response(status_code=403, content="Cross-origin request blocked."))
     if path_requires_auth(request.url.path) and not is_authenticated(request):
         logger.info("auth_required path=%s", request.url.path)
-        return auth_required_response(request)
-    return await call_next(request)
+        return add_security_headers(auth_required_response(request))
+    return add_security_headers(await call_next(request))
 
 
 def format_mail_table_time(value: str) -> str:

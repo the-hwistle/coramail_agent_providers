@@ -8,6 +8,8 @@
 
 목표 아키텍처와 상태 모델은 [Agentic RAG Mail Decision System](../architecture/agentic_rag_mail_decision_system.md)을 따른다.
 
+운영 출시 전 우선순위와 판정 기준은 [비즈니스 준비 계획](business-readiness-plan.md)에서 관리한다.
+
 ## 개발 원칙
 
 - 하나의 메일은 하나의 `Mail Decision Run`으로 분석한다.

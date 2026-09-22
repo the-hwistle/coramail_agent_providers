@@ -1454,6 +1454,7 @@ def test_operating_paths_require_authentication(monkeypatch):
     assert server.path_requires_auth("/ui/dashboard") is True
     assert server.path_requires_auth("/api/ui-state") is True
     assert server.path_requires_auth("/api/health") is False
+    assert server.path_requires_auth("/api/health/details") is True
     assert server.path_requires_auth("/api/client-version") is False
     assert server.path_requires_auth("/auth/gmail/callback") is False
 

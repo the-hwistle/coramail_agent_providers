@@ -49,4 +49,6 @@ runtime_archive=runtime.tar.gz
 qdrant_collection=$QDRANT_COLLECTION
 EOF
 
+uv run python -m app.tools.verify_production_backup "$BACKUP_DIR"
+
 printf 'production_backup=%s\n' "$BACKUP_DIR"

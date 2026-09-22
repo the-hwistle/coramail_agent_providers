@@ -93,7 +93,7 @@ The three startup commands are mutually exclusive. Each command removes containe
 
 `scripts/prod_smoke.sh` waits up to 60 seconds for a newly created web process to accept health requests. A transient connection refusal during startup is retried; a dependency-degraded response still fails unless `CORAMAIL_PROD_SMOKE_ALLOW_DEGRADED=true` is deliberately set for a documented diagnostic exception.
 
-`scripts/prod_external_smoke.sh` verifies that `CORAMAIL_BETA_BASE_URL` reaches `/api/health` through the same network path a beta user will use.
+`scripts/prod_external_smoke.sh` verifies that `CORAMAIL_BETA_BASE_URL` reaches the redacted public `/api/health` endpoint through the same network path a beta user will use. The public response exposes only `status`; authenticated operators can inspect dependency and mailbox details at `/api/health/details`.
 
 Use `CORAMAIL_PROD_ENV_FILE=/path/to/production.env` when the deployment host stores the production env file outside the repository checkout.
 
@@ -104,6 +104,8 @@ scripts/prod_backup.sh
 ```
 
 The backup script runs the same readiness gate, writes a PostgreSQL custom-format `pg_dump`, archives `/app/data/runtime` as `runtime.tar.gz`, creates and downloads a Qdrant collection snapshot, and stores a small manifest under `CORAMAIL_PROD_BACKUP_DIR` (default `backups/production`). This directory is ignored by Git and must be copied to the customer-approved backup location after creation. The runtime archive contains mail attachment originals and may contain credentials; handle the entire backup as sensitive data. If Qdrant is protected with an API key, set `CORAMAIL_QDRANT_API_KEY` in the production environment file.
+
+Before reporting success, the backup command runs `python -m app.tools.verify_production_backup`. The verifier rejects a missing or non-custom-format PostgreSQL dump, an unsafe or empty runtime archive, a missing manifest field, and a missing or ambiguous Qdrant snapshot. Operators can rerun it against a copied backup directory before a restore drill.
 
 When restoring a PostgreSQL dump that contains `email_attachments.storage_uri`, restore the matching `runtime.tar.gz` into the web service's `/app/data/runtime` volume before serving mail. Verify that every active attachment URI resolves to a file in that volume. Restoring the database alone leaves historical inline images and attachment downloads returning 404.
 
@@ -152,7 +154,7 @@ When restoring a PostgreSQL dump that contains `email_attachments.storage_uri`, 
 
 7. Security hardening
 
-   Review API authentication coverage, CSRF protection for mutating UI actions, role/organization authorization, audit log completeness, TLS termination, network policy, and log/trace masking for private mail content.
+   The application rejects browser cross-origin mutations using `Origin`/Fetch Metadata checks and adds baseline anti-sniffing, framing, referrer, and browser-permission headers. Continue reviewing role/organization authorization, audit log completeness, TLS termination, network policy, rate limiting, and log/trace masking for private mail content.
 
 ## Minimum Promotion Checks
 
