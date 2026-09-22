@@ -133,7 +133,11 @@ function swapTarget(target, html, swap) {
   template.content.querySelectorAll("[hx-swap-oob='true']").forEach((node) => {
     if (node.id) {
       const existing = document.getElementById(node.id);
-      if (existing) existing.replaceWith(node);
+      if (existing) {
+        node.removeAttribute("hx-swap-oob");
+        existing.replaceWith(node);
+        return;
+      }
     }
     node.remove();
   });
@@ -158,6 +162,48 @@ function swapTarget(target, html, swap) {
     updateSlidingTabs(target, true);
     initDashboardCharts(target);
   });
+}
+
+function chatComposerFor(element) {
+  if (!element?.matches) return null;
+  if (element.matches("[data-chat-composer]")) return element;
+  const view = element.closest(".chats-view");
+  return view?.querySelector("[data-chat-composer]") || null;
+}
+
+function chatResultsFor(form) {
+  if (!form) return null;
+  return document.querySelector(form.getAttribute("hx-target") || "#chat-results-body");
+}
+
+function renderChatPendingState(form, query) {
+  const target = chatResultsFor(form);
+  const template = document.getElementById("chatPendingTemplate");
+  if (!target || !template?.content || !query) return;
+  form.dataset.chatPendingQuery = query;
+  target.querySelectorAll(".chat-conversation-pending, .chat-empty").forEach((node) => node.remove());
+  const fragment = template.content.cloneNode(true);
+  const queryNode = fragment.querySelector("[data-chat-pending-query]");
+  if (queryNode) queryNode.textContent = query;
+  target.appendChild(fragment);
+  const input = form.querySelector("[name='q']");
+  if (input) input.value = "";
+  target.closest("[data-chat-thread]")?.scrollTo({ top: target.scrollHeight });
+}
+
+function renderChatRequestError(form, message) {
+  const target = chatResultsFor(form);
+  const query = form?.dataset.chatPendingQuery || "";
+  if (!target) return;
+  target.querySelectorAll(".chat-conversation-pending").forEach((node) => node.remove());
+  const error = document.createElement("div");
+  error.className = "chat-conversation chat-conversation-error";
+  error.innerHTML = '<div class="chat-message-group chat-message-group-assistant"><div class="chat-message chat-message-assistant"><div class="chat-avatar" aria-hidden="true">AI</div><div class="chat-bubble chat-error-bubble"><strong></strong></div></div></div>';
+  error.querySelector("strong").textContent = message;
+  target.appendChild(error);
+  const input = form.querySelector("[name='q']");
+  if (input && query) input.value = query;
+  delete form.dataset.chatPendingQuery;
 }
 
 function viewForUrl(url) {
@@ -853,6 +899,14 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
       const swap = options.swap || element.getAttribute("hx-swap") || "innerHTML";
       const form = element.tagName === "FORM" ? element : element.closest("form");
       const bodyPairs = [...parseHxVals(element), ...includedPairs(element)];
+      const chatForm = chatComposerFor(element);
+      const chatQuery = String(
+        element.matches?.("[data-chat-retry-query]")
+          ? element.dataset.chatRetryQuery || ""
+          : chatForm?.querySelector("[name='q']")?.value || "",
+      ).trim();
+      if (element.matches?.("[data-chat-retry-query]") && chatQuery) bodyPairs.push(["q", chatQuery]);
+      if (chatForm && (!chatQuery || chatForm.dataset.chatRequestInFlight === "true")) return;
       const init = { method, headers: requestHeaders(), credentials: "same-origin" };
       if (method.toUpperCase() === "GET") {
         for (const [key, value] of formBody(form, bodyPairs).entries()) url.searchParams.set(key, value);
@@ -860,37 +914,54 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
         init.headers = { ...init.headers, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" };
         init.body = formBody(form, bodyPairs).toString();
       }
-      const response = await fetch(url.toString(), init);
-      dispatchHxTriggers(response);
-      const redirect = response.headers.get("HX-Redirect");
-      if (redirect) {
-        window.location.assign(redirect);
-        return;
+      if (chatForm && chatQuery) {
+        chatForm.dataset.chatRequestInFlight = "true";
+        renderChatPendingState(chatForm, chatQuery);
       }
-      if (response.status === 401) {
-        window.location.assign("/login?next=/");
-        return;
-      }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if (swap === "none") return;
-      const text = await response.text();
-      if (target?.id === "main-panel") {
-        setHtml(text);
-        const view = viewForUrl(url.toString());
-        if (view) {
-          setActiveView(view);
-          window.history.replaceState(null, "", `/?view=${encodeURIComponent(view)}`);
+      if (element.matches?.("[data-chat-retry-query]")) element.disabled = true;
+      try {
+        const response = await fetch(url.toString(), init);
+        dispatchHxTriggers(response);
+        const redirect = response.headers.get("HX-Redirect");
+        if (redirect) {
+          window.location.assign(redirect);
+          return;
         }
-        return;
+        if (response.status === 401) {
+          window.location.assign("/login?next=/");
+          return;
+        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (swap === "none") return;
+        const text = await response.text();
+        if (target?.id === "main-panel") {
+          setHtml(text);
+          const view = viewForUrl(url.toString());
+          if (view) {
+            setActiveView(view);
+            window.history.replaceState(null, "", `/?view=${encodeURIComponent(view)}`);
+          }
+          return;
+        }
+        swapTarget(target, text, swap);
+        if (chatForm) delete chatForm.dataset.chatPendingQuery;
+        window.setTimeout(() => {
+          loadTriggerElements(document).forEach((node) => {
+            if (node.dataset.reactLoadFired === "true") return;
+            node.dataset.reactLoadFired = "true";
+            submitRequest(node).catch((loadError) => setError(loadError.message || "Request failed"));
+          });
+        }, 0);
+      } catch (error) {
+        if (chatForm) {
+          renderChatRequestError(chatForm, "대화 결과를 불러오지 못했습니다.");
+          return;
+        }
+        throw error;
+      } finally {
+        if (chatForm) delete chatForm.dataset.chatRequestInFlight;
+        if (element.matches?.("[data-chat-retry-query]")) element.disabled = false;
       }
-      swapTarget(target, text, swap);
-      window.setTimeout(() => {
-        loadTriggerElements(document).forEach((node) => {
-          if (node.dataset.reactLoadFired === "true") return;
-          node.dataset.reactLoadFired = "true";
-          submitRequest(node).catch((loadError) => setError(loadError.message || "Request failed"));
-        });
-      }, 0);
     },
     [setActiveView, setConfirm, setError, setHtml],
   );
@@ -1043,11 +1114,31 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
       }, 450);
       inputTimers.current.set(element, timer);
     };
+    const onChatInputKeyDown = (event) => {
+      const input = event.target;
+      if (!input?.matches?.("[data-chat-composer] [name='q']") || event.key !== "Enter" || event.shiftKey) return;
+      if (event.isComposing || event.keyCode === 229) {
+        input.dataset.chatSubmitAfterComposition = "true";
+        return;
+      }
+      event.preventDefault();
+      input.closest("[data-chat-composer]")?.requestSubmit();
+    };
+    const onChatCompositionEnd = (event) => {
+      const input = event.target;
+      if (!input?.matches?.("[data-chat-composer] [name='q']") || input.dataset.chatSubmitAfterComposition !== "true") return;
+      delete input.dataset.chatSubmitAfterComposition;
+      window.queueMicrotask(() => {
+        if (input.value.trim()) input.closest("[data-chat-composer]")?.requestSubmit();
+      });
+    };
     document.addEventListener("click", onClick);
     document.addEventListener("submit", onSubmit);
     document.addEventListener("change", onChange);
     document.addEventListener("input", onInput);
     document.addEventListener("keyup", onInput);
+    document.addEventListener("keydown", onChatInputKeyDown);
+    document.addEventListener("compositionend", onChatCompositionEnd);
     document.addEventListener("click", handleFavoriteMailClick, true);
     return () => {
       document.removeEventListener("click", onClick);
@@ -1055,6 +1146,8 @@ function useReactFragmentRuntime({ setActiveView, setHtml, setError, setConfirm,
       document.removeEventListener("change", onChange);
       document.removeEventListener("input", onInput);
       document.removeEventListener("keyup", onInput);
+      document.removeEventListener("keydown", onChatInputKeyDown);
+      document.removeEventListener("compositionend", onChatCompositionEnd);
       document.removeEventListener("click", handleFavoriteMailClick, true);
     };
   }, [openMailSettings, setConfirm, setError, showToast, submitRequest]);

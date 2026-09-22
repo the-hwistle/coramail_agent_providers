@@ -25,7 +25,7 @@
       <div class="chat-message-group chat-message-group-assistant">
         <div class="chat-message chat-message-assistant">
           <div class="chat-avatar" aria-hidden="true">AI</div>
-          <div class="chat-bubble {% if turn_error %}chat-error-bubble{% else %}chat-answer-bubble prose{% endif %}">
+          <div class="chat-bubble {% if turn_error %}chat-error-bubble{% else %}chat-answer-bubble{% endif %}">
             {% if turn_error %}
               <strong>{{ turn_error }}</strong>
             {% elif turn_result %}

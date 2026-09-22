@@ -2504,10 +2504,13 @@ tr:hover td {
 
 .chat-answer-bubble .search-answer-state {
   gap: 7px;
+  white-space: pre-wrap;
 }
 
-.chat-answer-bubble .search-answer-state p {
+.chat-answer-bubble .search-answer-state p,
+.chat-answer-bubble > p {
   margin: 0;
+  white-space: pre-wrap;
 }
 
 .chat-bubble-actions {
