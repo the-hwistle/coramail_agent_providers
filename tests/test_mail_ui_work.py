@@ -262,6 +262,14 @@ def test_demo_duplicate_received_mail_is_visible_to_assignee_for_review():
     server.ensure_can_view_work_email(request(), row)
     assert server.visible_work_rows_for_request(request(), [row]) == [row]
 
+
+def test_configured_auth_admin_can_view_all_assignees_after_username_change(monkeypatch):
+    monkeypatch.setattr(server, "AUTH_USERNAME", "cora-admin")
+    monkeypatch.setenv("CORAMAIL_ADMIN_USERNAMES", "admin")
+
+    assert server.user_can_view_all_assignees("cora-admin") is True
+    assert server.user_can_view_all_assignees("ordinary-user") is False
+
 def test_admin_assignments_default_shows_all_assignee_work(monkeypatch):
     rows = [
         {

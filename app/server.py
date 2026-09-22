@@ -898,11 +898,13 @@ def _assignee_login_matches(row: dict[str, object], username: str) -> bool:
 
 
 def _admin_usernames() -> set[str]:
-    return {
+    configured = {
         _normalized_identity(value)
         for value in os.getenv("CORAMAIL_ADMIN_USERNAMES", "admin").split(",")
         if value.strip()
     }
+    configured.add(_normalized_identity(AUTH_USERNAME))
+    return {value for value in configured if value}
 
 
 def user_can_view_all_assignees(username: str) -> bool:
