@@ -12,7 +12,7 @@
 #mailRows .clickable-row,
 #dashboardMailRows .clickable-row {
   position: relative;
-  transition-duration: 150ms;
+  transition: filter 110ms ease-out 0ms;
 }
 
 #mailRows .mail-favorite-toggle,
@@ -25,42 +25,26 @@
 #mailRows .clickable-row > td,
 #dashboardMailRows .clickable-row > td {
   position: relative;
-  top: 0;
   transition:
-    background-color 150ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    top 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-}
-
-#mailRows .clickable-row > td > *,
-#dashboardMailRows .clickable-row > td > * {
-  transition:
-    filter 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    background-color 110ms ease-out 0ms,
+    transform 110ms ease-out 0ms;
 }
 
 #mailRows .clickable-row:hover,
 #dashboardMailRows .clickable-row:hover {
+  z-index: 2;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.09));
+}
+
+#mailRows .clickable-row:not(.is-attention-urgent-important, .is-attention-urgent, .is-attention-important):hover,
+#dashboardMailRows .clickable-row:not(.is-attention-urgent-important, .is-attention-urgent, .is-attention-important):hover {
   background: transparent;
 }
 
 #mailRows .clickable-row:hover > td,
 #dashboardMailRows .clickable-row:hover > td {
-  z-index: 2;
-  top: -3px;
   background: transparent;
-  box-shadow:
-    0 10px 22px rgba(15, 23, 42, 0.13),
-    0 2px 6px rgba(15, 23, 42, 0.08);
-  transform: translate3d(0, -3px, 0) scale(1.006);
-}
-
-#mailRows .clickable-row:hover > td > *,
-#dashboardMailRows .clickable-row:hover > td > * {
-  filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.16));
-  transform: translate3d(0, -3px, 0);
+  transform: translateY(-1px);
 }
 
 #mailRows .clickable-row:hover > td:first-child,
@@ -98,14 +82,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #mailRows .clickable-row:hover > td,
-  #dashboardMailRows .clickable-row:hover > td {
-    top: 0;
-    transform: none;
+  #mailRows .clickable-row,
+  #dashboardMailRows .clickable-row,
+  #mailRows .clickable-row > td,
+  #dashboardMailRows .clickable-row > td {
+    transition-duration: 0ms;
   }
 
-  #mailRows .clickable-row:hover > td > *,
-  #dashboardMailRows .clickable-row:hover > td > * {
+  #mailRows .clickable-row:hover > td,
+  #dashboardMailRows .clickable-row:hover > td {
     transform: none;
   }
 }
@@ -120,14 +105,6 @@
 #dashboardMailRows .clickable-row.is-mail-favorite.is-selected > td:first-child {
   background: rgba(250, 204, 21, 0.18);
   box-shadow: inset 4px 0 0 #facc15;
-}
-
-#mailRows .clickable-row.is-mail-favorite:hover > td:first-child,
-#dashboardMailRows .clickable-row.is-mail-favorite:hover > td:first-child {
-  box-shadow:
-    inset 4px 0 0 #facc15,
-    0 10px 22px rgba(15, 23, 42, 0.13),
-    0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .assignee-work-stat.is-active > .material-symbols-outlined,
