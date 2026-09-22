@@ -29,7 +29,7 @@ class LocalLLMConfig:
     vision_base_url: str = ""
     embedding_base_url: str = ""
     text_model: str = "llama3.2:latest"
-    vision_model: str = "qwen2.5vl:7b"
+    vision_model: str = "qwen3-vl:2b"
     embedding_model: str = "nomic-embed-text:latest"
     timeout_seconds: float = 120.0
     provider: str = "openai"

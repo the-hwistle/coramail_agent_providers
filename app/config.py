@@ -37,7 +37,7 @@ def chat_text_model() -> str:
 
 
 def vision_model() -> str:
-    return os.getenv("CORAMAIL_VISION_MODEL", "qwen2.5vl:7b").strip() or "qwen2.5vl:7b"
+    return os.getenv("CORAMAIL_VISION_MODEL", "qwen3-vl:2b").strip() or "qwen3-vl:2b"
 
 
 def embedding_model() -> str:

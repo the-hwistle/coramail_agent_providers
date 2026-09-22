@@ -111,6 +111,7 @@ def test_env_example_documents_host_and_container_topology():
     assert "CORAMAIL_CONTAINER_LLM_BASE_URL=http://ollama:11434/v1" in env_example
     assert "CORAMAIL_OLLAMA_PORT=11456" in env_example
     assert "CORAMAIL_QDRANT_VECTOR_SIZE=768" in env_example
+    assert "CORAMAIL_VISION_MODEL=qwen3-vl:2b" in env_example
     assert "CORAMAIL_DEMO_SOURCE=postgres" in env_example
     assert "CORAMAIL_DEV_SEED_DEMO=true" in env_example
     assert "CORAMAIL_MAIL_PROVIDER=gmail" in env_example
@@ -255,6 +256,8 @@ def test_production_up_script_does_not_run_migrations():
     script = (PROJECT_DIR / "scripts" / "prod_up.sh").read_text(encoding="utf-8")
 
     assert "app.tools.check_deployment_readiness" in script
+    assert "--exposure internal" in script
+    assert "rm -sf edge tunnel" in script
     assert "up -d web" in script
     assert "--profile tools run --rm migrate" not in script
 
@@ -263,6 +266,8 @@ def test_production_public_up_script_starts_edge_profile():
     script = (PROJECT_DIR / "scripts" / "prod_public_up.sh").read_text(encoding="utf-8")
 
     assert "app.tools.check_deployment_readiness" in script
+    assert "--exposure edge" in script
+    assert "rm -sf tunnel" in script
     assert "--profile edge up -d web edge" in script
     assert "CORAMAIL_PROD_COMPOSE_ENV_FILE" in script
 
@@ -271,8 +276,17 @@ def test_production_tunnel_up_script_starts_cloudflare_tunnel_profile():
     script = (PROJECT_DIR / "scripts" / "prod_tunnel_up.sh").read_text(encoding="utf-8")
 
     assert "app.tools.check_deployment_readiness" in script
+    assert "--exposure tunnel" in script
+    assert "rm -sf edge" in script
     assert "--profile tunnel up -d web tunnel" in script
     assert "CORAMAIL_PROD_COMPOSE_ENV_FILE" in script
+
+
+def test_production_down_script_includes_all_optional_profiles():
+    script = (PROJECT_DIR / "scripts" / "prod_down.sh").read_text(encoding="utf-8")
+
+    assert "--profile edge --profile tunnel --profile tools" in script
+    assert "down --remove-orphans" in script
 
 
 def test_production_caddyfile_proxies_beta_host_to_web():
@@ -289,6 +303,8 @@ def test_production_smoke_script_checks_compose_and_health_endpoint():
     assert "docker compose --env-file" in script
     assert "exec -T web python" in script
     assert "http://127.0.0.1:8000/api/health" in script
+    assert "time.monotonic() + 60" in script
+    assert "urllib.error.URLError" in script
     assert "production_smoke=ok" in script
     assert "CORAMAIL_PROD_SMOKE_ALLOW_DEGRADED" in script
 
@@ -346,3 +362,14 @@ def test_dev_pull_models_uses_configured_ollama_models():
     assert "CORAMAIL_VISION_MODEL" in pull_script
     assert "CORAMAIL_EMBEDDING_MODEL" in pull_script
     assert "docker compose exec ollama ollama pull" in pull_script
+
+
+def test_development_vision_model_defaults_are_consistent():
+    compose = (PROJECT_DIR / "docker-compose.yml").read_text(encoding="utf-8")
+    dev_env = (PROJECT_DIR / "scripts" / "dev_env.sh").read_text(encoding="utf-8")
+    app_config = (PROJECT_DIR / "app" / "config.py").read_text(encoding="utf-8")
+    llm_gateway = (PROJECT_DIR / "app" / "llm" / "gateway.py").read_text(encoding="utf-8")
+
+    for source in (compose, dev_env, app_config, llm_gateway):
+        assert "qwen3-vl:2b" in source
+        assert "qwen2.5vl:7b" not in source

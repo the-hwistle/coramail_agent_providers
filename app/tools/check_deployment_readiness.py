@@ -98,6 +98,31 @@ def deployment_readiness_issues(env: dict[str, str] | None = None) -> list[Readi
     return issues
 
 
+def deployment_exposure_issues(values: dict[str, str], exposure: str) -> list[ReadinessIssue]:
+    issues: list[ReadinessIssue] = []
+    if exposure == "internal":
+        return issues
+
+    if not _enabled(values.get("CORAMAIL_BETA_PUBLIC", "false")):
+        issues.append(
+            ReadinessIssue(
+                Severity.ERROR,
+                "public-exposure-disabled",
+                f"The {exposure} exposure path requires CORAMAIL_BETA_PUBLIC=true.",
+            )
+        )
+
+    if exposure == "tunnel" and not values.get("CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN", "").strip():
+        issues.append(
+            ReadinessIssue(
+                Severity.ERROR,
+                "cloudflare-tunnel-token",
+                "The tunnel exposure path requires CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN.",
+            )
+        )
+    return issues
+
+
 def _require_deployment_mode(values: dict[str, str], issues: list[ReadinessIssue]) -> None:
     mode = values.get("CORAMAIL_DEPLOYMENT_MODE", "").strip().casefold()
     allowed = {"setup", "saas", "private", "hybrid"}
@@ -227,6 +252,18 @@ def _require_public_beta_settings(values: dict[str, str], issues: list[Readiness
                 "CORAMAIL_BETA_PUBLIC=true requires a non-localhost CORAMAIL_BETA_BASE_URL hostname.",
             )
         )
+    elif parsed.hostname.casefold().endswith(".trycloudflare.com"):
+        issues.append(
+            ReadinessIssue(
+                Severity.ERROR,
+                "public-beta-quick-tunnel",
+                (
+                    "CORAMAIL_BETA_PUBLIC=true must not use an ad-hoc trycloudflare.com Quick Tunnel URL. "
+                    "Use a Cloudflare Named Tunnel public hostname on a registered domain, or mark the beta "
+                    "as non-public until the fixed hostname is configured."
+                ),
+            )
+        )
 
     if not beta_host:
         issues.append(
@@ -331,6 +368,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check CoRA Mail production deployment readiness settings.")
     parser.add_argument("--env-file", type=Path, help="Optional deployment environment file to check.")
     parser.add_argument("--warnings-as-errors", action="store_true")
+    parser.add_argument(
+        "--exposure",
+        choices=("internal", "edge", "tunnel"),
+        help="Require settings for the selected mutually exclusive exposure path.",
+    )
     parser.add_argument("--format", choices=("text", "json"), default="text", help="Output format.")
     args = parser.parse_args()
 
@@ -339,6 +381,8 @@ def main() -> int:
         env.update(_read_env_file(args.env_file))
 
     issues = deployment_readiness_issues(env)
+    if args.exposure is not None:
+        issues.extend(deployment_exposure_issues(env, args.exposure))
     if args.format == "json":
         print(
             json.dumps(

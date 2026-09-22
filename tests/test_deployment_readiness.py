@@ -4,7 +4,12 @@ import sys
 from pathlib import Path
 
 from app.tools.render_deployment_plan import deployment_plan, render_markdown
-from app.tools.check_deployment_readiness import Severity, _read_env_file, deployment_readiness_issues
+from app.tools.check_deployment_readiness import (
+    Severity,
+    _read_env_file,
+    deployment_exposure_issues,
+    deployment_readiness_issues,
+)
 
 
 def test_deployment_readiness_rejects_local_defaults() -> None:
@@ -426,6 +431,62 @@ def test_deployment_readiness_accepts_public_beta_edge_settings() -> None:
     )
 
     assert [issue for issue in issues if issue.severity is Severity.ERROR] == []
+
+
+def test_deployment_readiness_rejects_public_quick_tunnel_url() -> None:
+    issues = deployment_readiness_issues(
+        {
+            "CORAMAIL_DEMO_MODE": "false",
+            "CORAMAIL_LOCAL_DEV_DEFAULTS": "false",
+            "CORAMAIL_DEV_SEED_DEMO": "false",
+            "CORAMAIL_AUTH_ENABLED": "true",
+            "CORAMAIL_AUTH_COOKIE_SECURE": "true",
+            "CORAMAIL_AUTH_USERNAME": "ops-admin",
+            "CORAMAIL_AUTH_PASSWORD": "long-random-password-value",
+            "CORAMAIL_AUTH_SECRET": "k" * 64,
+            "CORAMAIL_POSTGRES_PASSWORD": "long-random-db-password",
+            "CORAMAIL_DATABASE_URL": "postgresql://coramail:secret@postgres.internal:5432/coramail",
+            "CORAMAIL_QDRANT_URL": "http://qdrant.internal:6333",
+            "CORAMAIL_LLM_BASE_URL": "http://vllm.internal:8000/v1",
+            "CORAMAIL_WEB_IMAGE": "registry.internal/coramail-agent:2026-09-03",
+            "CORAMAIL_BETA_BASE_URL": "https://temporary-beta.trycloudflare.com",
+            "CORAMAIL_BETA_PUBLIC": "true",
+            "CORAMAIL_BETA_HOST": "temporary-beta.trycloudflare.com",
+            "CORAMAIL_DEPLOYMENT_MODE": "saas",
+            "CORAMAIL_LLM_RUNTIME": "managed",
+            "CORAMAIL_TEXT_MODEL": "qwen2.5-7b-awq",
+            "CORAMAIL_CHAT_TEXT_MODEL": "qwen2.5-7b-awq",
+            "CORAMAIL_VISION_MODEL": "qwen3-vl-2b",
+            "CORAMAIL_EMBEDDING_MODEL": "bge-m3",
+            "CORAMAIL_LLM_PROVIDER": "vllm",
+            "CORAMAIL_MAIL_PROVIDER": "setup",
+        }
+    )
+
+    assert {
+        issue.code for issue in issues if issue.severity is Severity.ERROR
+    } == {"public-beta-quick-tunnel"}
+
+
+def test_deployment_exposure_requires_public_mode_for_edge_and_tunnel() -> None:
+    assert [issue.code for issue in deployment_exposure_issues({}, "edge")] == [
+        "public-exposure-disabled"
+    ]
+    assert [issue.code for issue in deployment_exposure_issues({}, "tunnel")] == [
+        "public-exposure-disabled",
+        "cloudflare-tunnel-token",
+    ]
+
+
+def test_deployment_exposure_accepts_configured_paths() -> None:
+    values = {
+        "CORAMAIL_BETA_PUBLIC": "true",
+        "CORAMAIL_CLOUDFLARE_TUNNEL_TOKEN": "configured-token",
+    }
+
+    assert deployment_exposure_issues(values, "internal") == []
+    assert deployment_exposure_issues(values, "edge") == []
+    assert deployment_exposure_issues(values, "tunnel") == []
 
 
 def test_read_env_file_strips_quotes_and_ignores_comments(tmp_path: Path) -> None:

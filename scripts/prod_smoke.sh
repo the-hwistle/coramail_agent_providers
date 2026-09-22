@@ -16,10 +16,24 @@ docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml exec -T web pyt
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 
-with urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=10) as response:
-    payload = json.loads(response.read().decode("utf-8"))
+health_url = "http://127.0.0.1:8000/api/health"
+deadline = time.monotonic() + 60
+last_error: Exception | None = None
+while time.monotonic() < deadline:
+    try:
+        with urllib.request.urlopen(health_url, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        break
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        last_error = exc
+        time.sleep(1)
+else:
+    print(f"production smoke failed: {health_url} was not ready within 60s: {last_error}", file=sys.stderr)
+    raise SystemExit(1)
 
 print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
 

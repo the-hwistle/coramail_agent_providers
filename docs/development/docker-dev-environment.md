@@ -88,6 +88,7 @@ Search/Chats 답변 생성은 `CORAMAIL_CHAT_TEXT_MODEL`로 Mail Decision 본 �
 ```env
 CORAMAIL_TEXT_MODEL=llama3.2:latest
 CORAMAIL_CHAT_TEXT_MODEL=llama3.2:latest
+CORAMAIL_VISION_MODEL=qwen3-vl:2b
 ```
 
 기존 host Ollama를 컨테이너에서 직접 쓰고 싶으면 `.env`에서 다음처럼 바꿀 수 있다. 단, host Ollama가 Docker bridge에서 접근 가능한 주소로 bind되어 있어야 한다.
