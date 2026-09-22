@@ -74,6 +74,19 @@ def test_react_shell_uses_sliding_display_and_fragment_tabs():
     assert "setViewLoading(true)" in source
     assert "startTransition" not in source
 
+
+def test_react_shell_keeps_monitoring_column_runtime_in_feature_module():
+    source = Path("app/static/react/coramail-react.js").read_text(encoding="utf-8")
+    monitoring_source = Path("app/static/react/monitoring-columns.js").read_text(encoding="utf-8")
+
+    assert 'import { initMonitoringColumns } from "./monitoring-columns.js";' in source
+    assert "initMonitoringColumns(root);" in source
+    assert "coramail.monitoring.visibleColumns.v1" not in source
+    assert 'export function initMonitoringColumns(root = document)' in monitoring_source
+    assert "coramail.monitoring.visibleColumns.v1" in monitoring_source
+    assert "coramail.monitoring.columnWidths.v1" in monitoring_source
+    assert "coramail.monitoring.columnOrder.v1" in monitoring_source
+
 def test_shell_renders_monitoring_navigation():
     html = server.templates.get_template("shell.html").render(
         **server.ui_globals(),

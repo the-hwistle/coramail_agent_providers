@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Chart, registerables } from "chart.js";
+import { initMonitoringColumns } from "./monitoring-columns.js";
 
 const h = React.createElement;
 Chart.register(...registerables);
@@ -1169,6 +1170,7 @@ function App() {
     syncInboxSelection();
     updateSlidingTabs(root, true);
     initDashboardCharts(root);
+    initMonitoringColumns(root);
     loadTriggerElements(root).forEach((element) => {
       if (element.dataset.reactLoadFired === "true") return;
       element.dataset.reactLoadFired = "true";
