@@ -30,7 +30,8 @@ def test_server_has_no_direct_app_route_decorators():
 
 def test_server_route_registry_preserves_public_paths():
     assert str(server.app.url_path_for("login_form")) == "/login"
-    assert str(server.app.url_path_for("ui_root")) == "/"
+    assert str(server.app.url_path_for("react_shell")) == "/"
+    assert str(server.app.url_path_for("ui_root")) == "/legacy"
     assert (
         str(server.app.url_path_for("ui_my_work_email_drawer", email_ref="mail-1"))
         == "/ui/my-work/emails/mail-1"

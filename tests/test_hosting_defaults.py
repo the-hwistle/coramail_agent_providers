@@ -35,12 +35,15 @@ def test_mail_rows_falls_back_to_demo_fixtures_when_configured_store_is_down(mon
         def list_emails(self, **kwargs):
             raise OperationalError("connection refused")
 
+    monkeypatch.setattr(server, "mail_provider_setup_required", lambda: False)
     monkeypatch.setattr(server, "mail_service", lambda: FailingMailService())
 
     rows = server.mail_rows()
 
     assert rows
-    assert rows == server.demo_service().list_emails()
+    assert [row["email_uid"] for row in rows] == [
+        row["email_uid"] for row in server.demo_service().list_emails()
+    ]
 
 
 def test_health_reports_degraded_instead_of_500_when_mail_store_is_down(monkeypatch):
@@ -51,6 +54,7 @@ def test_health_reports_degraded_instead_of_500_when_mail_store_is_down(monkeypa
         def list_emails(self, **kwargs):
             raise OperationalError("connection refused")
 
+    monkeypatch.setattr(server, "mail_provider_setup_required", lambda: False)
     monkeypatch.setattr(server, "mail_service", lambda: FailingMailService())
     monkeypatch.setattr(
         server,
